@@ -1,0 +1,52 @@
+# ── API 키 (절대 올리면 안 됨) ──
+groq_key.txt
+claude_key.txt
+gemini_key.txt
+*_key.txt
+.env
+
+# ── 보스 개인 정보 (이름·학교 등) ──
+boss_info.json
+
+# ── 비밀번호 / 폰 연결 인증서·세션 ──
+guest_password.json
+phone_cert.pem
+phone_key.pem
+phone_sessions.json
+*.pem
+
+# ── 목소리(생체 정보) ──
+voiceprint.json
+voice_samples/
+목소리_샘플/
+speaker_threshold.json
+wake_test.wav
+
+# ── 대화 기록 / 로그 / 실행 상태 ──
+chat_history.json
+jarvis_notes.txt
+jarvis_log.txt
+listen_log.txt
+speaker_log.txt
+jarvis_crash.txt
+jarvis_stdout.log
+jarvis_run.json
+gemini_usage.json
+location_cache.json
+profile.json
+reply_lang.json
+tts_rate.json
+*.log
+
+# ── 자동으로 받는 모델 / 캐시 ──
+*.onnx
+*.part
+tts_cache/
+__pycache__/
+*.pyc
+
+# ── 기타 ──
+.claude/
+poster/
+Thumbs.db
+desktop.ini

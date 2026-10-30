@@ -1,0 +1,2172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S.</title>
+<style>
+  :root{
+    --cyan-dim:#0f5c6e;
+    --cyan:#29e3ff;
+    --bg:#040810;
+    --panel:#071019;
+    --glow: 0 0 6px rgba(41,227,255,.55), 0 0 14px rgba(41,227,255,.3);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:radial-gradient(circle at 50% 20%, #0a1420 0%, #040810 60%, #000 100%);
+    color:var(--cyan);
+    font-family: 'Consolas','Courier New',monospace;
+    overflow:hidden;
+    position:relative;
+  }
+  /* 배경 격자: 아이언맨 HUD 느낌의 은은한 스캔 그리드 */
+  body::before{
+    content:"";
+    position:fixed; inset:0; z-index:-2;
+    background-image:
+      linear-gradient(rgba(41,227,255,.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(41,227,255,.06) 1px, transparent 1px);
+    background-size:42px 42px;
+    -webkit-mask-image: radial-gradient(circle at 50% 42%, black 0%, transparent 72%);
+    mask-image: radial-gradient(circle at 50% 42%, black 0%, transparent 72%);
+  }
+  /* 위에서 아래로 천천히 흐르는 스캔라인 */
+  body::after{
+    content:"";
+    position:fixed; inset:0; z-index:-1;
+    background: repeating-linear-gradient(0deg, rgba(41,227,255,.035) 0px, rgba(41,227,255,.035) 1px, transparent 1px, transparent 3px);
+    animation: scanmove 7s linear infinite;
+    opacity:.5;
+  }
+  @keyframes scanmove{ from{ background-position-y:0; } to{ background-position-y:240px; } }
+  .frame{
+    display:grid;
+    grid-template-columns: 1.1fr 1.4fr 1.1fr;
+    grid-template-rows: auto 1fr auto;
+    gap:14px;
+    height:100vh;
+    padding:16px;
+  }
+  .panel{
+    border:1px solid var(--cyan-dim);
+    border-radius:6px;
+    background:rgba(41,227,255,0.03);
+    box-shadow: inset 0 0 20px rgba(41,227,255,.05);
+    padding:12px;
+    position:relative;
+    min-height:0;      /* 내용이 많아도 자기 칸(그리드 셀)을 넘어 커지지 않도록 */
+    overflow:hidden;
+  }
+  .panel::before{
+    content:"⟨ " attr(data-label) " ⟩";
+    position:absolute; top:-9px; left:10px;
+    background:var(--bg);
+    padding:0 6px;
+    font-size:11px;
+    letter-spacing:2px;
+    color:var(--cyan);
+    text-shadow:var(--glow);
+  }
+  .header{
+    grid-column:1/4;
+    display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--cyan-dim);
+    padding-bottom:10px;
+    position:relative;
+  }
+  .header::after{
+    content:"";
+    position:absolute; left:0; right:0; bottom:-1px; height:1px;
+    background:linear-gradient(90deg, transparent, var(--cyan), transparent);
+    animation: shimmer 3s ease-in-out infinite;
+  }
+  @keyframes shimmer{ 0%,100%{ opacity:.25;} 50%{ opacity:1;} }
+  .title{
+    font-size:26px; letter-spacing:6px; text-shadow:var(--glow);
+  }
+  .clock{ font-size:14px; letter-spacing:2px; text-align:right; opacity:.85;}
+  .clock div:first-child{font-size:20px;}
+
+  /* console */
+  #consoleBox{
+    height:100%;
+    overflow-y:auto;
+    font-size:12.5px;
+    line-height:1.55;
+    white-space:pre-wrap;
+  }
+  #consoleBox .line{opacity:.9;}
+  #consoleBox .line.sys{color:#eaf6ff;}
+  #consoleBox .line.user{color:var(--cyan);}
+  #consoleBox .line.err{color:#ff6b6b;}
+
+  /* center */
+  .center{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px;
+    overflow:hidden;   /* 텍스트가 길어져도 링(가운데 화면)이 밀리지 않도록 */
+  }
+  .ring{
+    width:200px; height:200px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    background:
+      radial-gradient(circle, rgba(41,227,255,.08) 0%, transparent 70%);
+    border:1px solid var(--cyan-dim);
+  }
+  .ring::before{
+    content:"";
+    position:absolute; inset:-8px;
+    border-radius:50%;
+    border:2px solid transparent;
+    border-top-color:var(--cyan);
+    animation:spin 3.2s linear infinite;
+    opacity:.55;
+  }
+  .ring.awake::before{ animation-duration:1.1s; opacity:1;}
+  /* 레이더 스윕: 원 안쪽을 도는 부채꼴 빛줄기 */
+  .ring::after{
+    content:"";
+    position:absolute; inset:14px;
+    border-radius:50%;
+    background: conic-gradient(from 0deg, rgba(41,227,255,.4), transparent 30deg, transparent 360deg);
+    animation: spin 2.6s linear infinite;
+    opacity:.45;
+  }
+  .ring.awake::after{ animation-duration:1s; opacity:.85; }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+  .mic-dot{
+    width:16px; height:16px; border-radius:50%;
+    background:var(--cyan-dim);
+    box-shadow:none;
+    transition:.3s;
+  }
+  .mic-dot.live{
+    background:var(--cyan);
+    box-shadow:0 0 10px 4px rgba(41,227,255,.7);
+    animation:pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.3);} }
+  .state-text{ font-size:16px; letter-spacing:3px; text-shadow:var(--glow); text-align:center;}
+  .sub-text{ font-size:11px; opacity:.6; letter-spacing:2px;}
+  .transcript{
+    min-height:40px; max-height:56px; overflow-y:auto; max-width:340px; text-align:center;
+    font-size:13px; color:#7fe7ff; opacity:.9; word-break:break-word;
+  }
+  .reply{
+    min-height:20px; max-height:92px; overflow-y:auto; max-width:340px; text-align:center;
+    font-size:13px; color:#bdeeff; word-break:break-word;
+  }
+
+  /* 대답 카드: 날씨·번역·계산·퀴즈 결과를 부스에서 멀리서도 보이게 크게 띄움 */
+  #infoCards{
+    position:fixed; left:50%; bottom:64px; transform:translateX(-50%);
+    display:flex; gap:14px; justify-content:center; flex-wrap:wrap;
+    max-width:94vw; z-index:40; pointer-events:none;
+  }
+  .icard{
+    min-width:220px; max-width:520px; padding:14px 22px 16px;
+    border:1px solid var(--cyan); border-radius:10px;
+    background:rgba(4,12,22,.92); box-shadow:var(--glow), inset 0 0 24px rgba(41,227,255,.08);
+    text-align:center; animation:cardIn .35s ease-out;
+  }
+  .icard .ic-icon{ font-size:38px; line-height:1.2; font-family:'Segoe UI Emoji','Apple Color Emoji',sans-serif; }
+  .icard .ic-title{ font-size:13px; letter-spacing:3px; opacity:.8; margin-top:2px; }
+  .icard .ic-big{ font-size:40px; font-weight:bold; color:#e8fbff; text-shadow:var(--glow); margin:6px 0 4px;
+    font-family:'Malgun Gothic','Segoe UI',sans-serif; word-break:keep-all; line-height:1.25; }
+  .icard .ic-big.long{ font-size:24px; }
+  .icard .ic-sub{ font-size:15px; color:#9fe9ff; font-family:'Malgun Gothic','Segoe UI',sans-serif; }
+  .icard ol{ text-align:left; margin:6px 0 0; padding-left:22px; font-size:17px; color:#e8fbff;
+    font-family:'Malgun Gothic','Segoe UI',sans-serif; line-height:1.5; }
+  .icard.fade{ opacity:0; transition:opacity .6s; }
+  /* 주사위·동전·룰렛: 화면에서 진짜로 굴리고 돌린 뒤 결과를 보여줌 */
+  .icard .ic-big.wait, .icard .ic-sub.wait{ visibility:hidden; }
+  .icard .ic-big.pop{ animation:resultPop .45s ease-out; }
+  @keyframes resultPop{ 0%{ transform:scale(.6); opacity:0; } 70%{ transform:scale(1.15); } 100%{ transform:none; opacity:1; } }
+  .anim-stage{ display:flex; gap:26px; justify-content:center; align-items:center; margin:10px 0 6px; perspective:600px; }
+  .dice{ width:84px; height:84px; position:relative; transform-style:preserve-3d;
+    transition:transform 1.5s cubic-bezier(.2,.75,.25,1); }
+  .dice .face{ position:absolute; inset:0; border-radius:14px; background:#f4fbff; border:2px solid #bfe9f5;
+    box-shadow:inset 0 0 14px rgba(0,60,90,.28); display:grid; grid-template:repeat(3,1fr)/repeat(3,1fr); padding:10px; }
+  .dice .pip{ width:15px; height:15px; border-radius:50%; background:#0b2236; align-self:center; justify-self:center; }
+  .dice .face.f1 .pip{ background:#e0303a; width:20px; height:20px; }
+  .dice .f1{ transform:translateZ(42px); } .dice .f6{ transform:rotateY(180deg) translateZ(42px); }
+  .dice .f3{ transform:rotateY(90deg) translateZ(42px); } .dice .f4{ transform:rotateY(-90deg) translateZ(42px); }
+  .dice .f2{ transform:rotateX(90deg) translateZ(42px); } .dice .f5{ transform:rotateX(-90deg) translateZ(42px); }
+  .dice-wrap{ animation:diceHop 1.5s ease-out; }
+  @keyframes diceHop{ 0%{ transform:translateY(-50px); } 30%{ transform:translateY(0); } 45%{ transform:translateY(-22px); }
+    60%{ transform:translateY(0); } 72%{ transform:translateY(-8px); } 82%,100%{ transform:none; } }
+  .coin{ width:110px; height:110px; position:relative; transform-style:preserve-3d;
+    transition:transform 1.7s cubic-bezier(.25,.8,.3,1); }
+  .coin .side{ position:absolute; inset:0; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font:bold 34px 'Malgun Gothic',sans-serif; color:#5a3b00; backface-visibility:hidden;
+    background:radial-gradient(circle at 35% 30%, #fff3b0, #f2c230 45%, #b8860b 100%);
+    border:5px solid #d9a520; box-shadow:inset 0 0 0 6px rgba(255,255,255,.25); }
+  .coin .back{ transform:rotateY(180deg); background:radial-gradient(circle at 35% 30%, #fff, #cfd6dc 45%, #8a96a0 100%);
+    border-color:#aab4bc; color:#2c3a44; }
+  .coin-wrap{ animation:coinToss 1.7s ease-out; }
+  @keyframes coinToss{ 0%{ transform:translateY(0); } 35%{ transform:translateY(-70px); } 70%{ transform:translateY(0); }
+    82%{ transform:translateY(-10px); } 100%{ transform:none; } }
+  .wheel-box{ position:relative; width:300px; height:300px; margin-top:14px; }
+  .wheel-box canvas{ width:300px; height:300px; display:block; transition:transform 4.2s cubic-bezier(.12,.7,.1,1);
+    filter:drop-shadow(0 0 10px rgba(41,227,255,.45)); }
+  .wheel-box .pointer{ position:absolute; left:50%; top:-6px; transform:translateX(-50%); width:0; height:0;
+    border-left:16px solid transparent; border-right:16px solid transparent; border-top:30px solid #ff4d6d;
+    filter:drop-shadow(0 0 6px rgba(255,77,109,.8)); z-index:2; }
+  .wheel-box .hub{ position:absolute; left:50%; top:50%; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%;
+    background:#06121e; border:3px solid var(--cyan); box-shadow:var(--glow); }
+  .num-roll{ font:bold 72px 'Segoe UI',sans-serif; color:#e8fbff; text-shadow:var(--glow); min-width:160px; }
+  @media (max-width:700px){ .wheel-box, .wheel-box canvas{ width:240px; height:240px; } }
+  @keyframes cardIn{ from{ opacity:0; transform:translateY(16px) scale(.96);} to{ opacity:1; transform:none;} }
+  @media (max-width:700px){ .icard{ min-width:0; max-width:92vw; } .icard .ic-big{ font-size:30px; } }
+
+  /* 📱 핸드폰 화면: 한 줄로 (가운데 CORE → 대화 기록), PC 전용 버튼·시스템 칸은 숨김 */
+  body.phone .frame{ grid-template-columns:1fr; grid-template-rows:auto minmax(250px, 1fr) minmax(140px, 32dvh) auto;
+    height:100dvh; padding:10px; gap:10px; }
+  body.phone .header{ grid-column:1; }
+  body.phone .header .title{ font-size:18px; letter-spacing:3px; }
+  body.phone .clock{ font-size:11px; letter-spacing:1px; }
+  body.phone .clock #clockTime{ font-size:14px; }
+  body.phone .center{ gap:12px; }
+  body.phone .ring{ width:150px; height:150px; flex-shrink:0; }   /* 칸이 좁아도 동그라미가 찌그러지지 않게 */
+  body.phone #consoleBox{ font-size:11.5px; line-height:1.45; }
+  body.phone .panel.center{ order:1; }
+  body.phone .panel[data-label="MAIN"]{ order:2; }
+  body.phone .panel[data-label="SYSTEM"], body.phone #geminiBox, body.phone #miniBtn, body.phone #voiceBtn,
+  body.phone #deviceBtn, body.phone #presentBtn{ display:none !important; }
+  body.phone .footer{ order:3; grid-column:1; }
+  body.phone #guestBtn{ display:none !important; }   /* 폰에선 체험 모드 안 씀 */
+  body.phone #typeInput{ font-size:16px; }   /* 16px보다 작으면 폰이 입력할 때 화면을 확대함 */
+  body.phone #infoCards{ bottom:20px; }
+  #phoneBadge{ display:none; }
+  body.phone #phoneBadge{ display:inline; color:#31e07a; margin-left:8px; }
+
+  /* 음성 파형: 듣거나 말할 때 움직이는 막대 */
+  .waveform{
+    display:flex; align-items:flex-end; justify-content:center;
+    gap:4px; height:22px;
+  }
+  .waveform span{
+    width:3px; height:6px; border-radius:2px;
+    background:var(--cyan-dim);
+    transition:background .3s;
+    animation:wave 1.6s ease-in-out infinite;
+    animation-play-state:paused;
+  }
+  .waveform span:nth-child(1){ animation-delay:0s; }
+  .waveform span:nth-child(2){ animation-delay:.15s; }
+  .waveform span:nth-child(3){ animation-delay:.3s; }
+  .waveform span:nth-child(4){ animation-delay:.45s; }
+  .waveform span:nth-child(5){ animation-delay:.6s; }
+  .waveform.active span{
+    background:var(--cyan);
+    animation-play-state:running;
+    box-shadow:0 0 6px rgba(41,227,255,.6);
+  }
+  .waveform.speaking span{ animation-duration:.6s; }
+  @keyframes wave{ 0%,100%{ height:6px; } 50%{ height:22px; } }
+
+  /* right stats */
+  .stat-row{ margin-bottom:14px; }
+  .stat-label{ font-size:11px; letter-spacing:2px; opacity:.75; margin-bottom:4px; display:flex; justify-content:space-between;}
+  .bar-outer{ height:8px; border:1px solid var(--cyan-dim); border-radius:4px; overflow:hidden;}
+  .bar-inner{ height:100%; background:linear-gradient(90deg,var(--cyan-dim),var(--cyan)); width:0%; transition:width .6s;}
+  .net-status{ font-size:12px; margin-top:6px;}
+  .dot-online{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#3fff8a; box-shadow:0 0 6px #3fff8a; margin-right:6px;}
+  .dot-offline{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#ff5050; box-shadow:0 0 6px #ff5050; margin-right:6px;}
+
+  .footer{
+    grid-column:1/4;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:11px; opacity:.6; letter-spacing:2px;
+    border-top:1px solid var(--cyan-dim);
+    padding-top:8px;
+  }
+  #enableBtn{
+    background:transparent; border:1px solid var(--cyan); color:var(--cyan);
+    padding:10px 18px; border-radius:6px; cursor:pointer; font-family:inherit;
+    letter-spacing:2px; font-size:13px;
+  }
+  #enableBtn:hover{ background:rgba(41,227,255,.12); }
+  #overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.85);
+    display:flex; flex-direction:column; gap:16px;
+    align-items:center; justify-content:center; z-index:50;
+    text-align:center;
+  }
+  #overlay p{ max-width:420px; font-size:13px; opacity:.8; line-height:1.6;}
+  /* 우하단 Gemini 남은 요청량 표시 */
+  #geminiBox{
+    position:fixed; right:16px; bottom:16px; z-index:40;
+    display:flex; align-items:center; gap:8px;
+    padding:8px 12px; border-radius:10px;
+    background:rgba(10,20,30,.72); border:1px solid rgba(41,227,255,.25);
+    font-size:12px; color:#cfe9f2; letter-spacing:.2px;
+    backdrop-filter:blur(6px); pointer-events:none;
+  }
+  #geminiBox b{ color:#eaffff; font-weight:700; }
+  #geminiBox .g-dot{ width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  .g-dot.g-green{ background:#31e07a; box-shadow:0 0 8px #31e07a; }
+  .g-dot.g-yellow{ background:#ffcf4d; box-shadow:0 0 8px #ffcf4d; }
+  .g-dot.g-red{ background:#ff5d6c; box-shadow:0 0 8px #ff5d6c; }
+  .g-dot.g-off{ background:#7a8a95; }
+  /* 오른쪽 아래 버튼들 (미니 자비스 / 목소리 등록) */
+  #miniBtn, #voiceBtn, #presentBtn, #guestBtn{
+    position:fixed; right:16px; z-index:41;
+    padding:8px 12px; border-radius:10px; cursor:pointer;
+    background:rgba(10,20,30,.72); border:1px solid rgba(41,227,255,.35);
+    color:#cfe9f2; font-size:13px; font-weight:700; backdrop-filter:blur(6px);
+  }
+  #miniBtn{ bottom:56px; }
+  #voiceBtn{ display:none !important; }   /* 목소리 확인을 꺼 두어서 등록 버튼도 숨김 */
+  #voiceBtn{ bottom:96px; }
+  #presentBtn{ bottom:136px; }
+  #guestBtn{ bottom:176px; }
+  #deviceBtn{ position:fixed; right:16px; z-index:41; bottom:216px; padding:8px 12px; border-radius:10px; cursor:pointer;
+    background:rgba(10,20,30,.72); border:1px solid rgba(41,227,255,.35); color:#cfe9f2; font-size:13px; font-weight:700; }
+  #deviceBtn:hover{ background:rgba(41,227,255,.14); }
+  #deviceModal{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.6); }
+  #deviceModal.show{ display:flex; }
+  .dv-box{ width:min(440px, 92vw); padding:22px; border-radius:14px; background:#0a1622; border:1px solid #29e3ff;
+           display:flex; flex-direction:column; gap:10px; box-shadow:0 0 24px rgba(41,227,255,.35); }
+  .dv-label{ font-size:13px; color:#a9c4ce; margin-top:4px; }
+  #micSel, #spkSel{ padding:9px 10px; border-radius:10px; border:1px solid rgba(41,227,255,.45); background:#050d16; color:#eaffff; font-size:14px; }
+  .dv-tip{ font-size:12.5px; color:#a9c4ce; line-height:1.5; }
+  #guestBtn.active{ background:#31e07a; color:#04220f; border-color:#31e07a; }
+  #guestBadge{
+    position:fixed; left:50%; transform:translateX(-50%); top:16px; z-index:42; display:none;
+    padding:8px 18px; border-radius:20px; font-size:15px; font-weight:700;
+    background:rgba(49,224,122,.16); border:1px solid #31e07a; color:#c9f7da;
+  }
+  #guestBadge.show{ display:block; }
+  #guestModal{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.6); }
+  #guestModal.show{ display:flex; }
+  #guestForm{ width:min(360px, 90vw); padding:22px; border-radius:14px; background:#0a1622; border:1px solid #29e3ff;
+              display:flex; flex-direction:column; gap:12px; box-shadow:0 0 24px rgba(41,227,255,.35); }
+  .gm-title{ font-size:17px; font-weight:700; color:#eaffff; }
+  #guestPw{ padding:10px 12px; border-radius:10px; border:1px solid rgba(41,227,255,.45); background:#050d16; color:#eaffff; font-size:15px; }
+  #guestMsg{ min-height:18px; font-size:13px; color:#ffb547; }
+  .gm-row{ display:flex; gap:10px; justify-content:flex-end; }
+  .gm-row button{ padding:8px 16px; border-radius:10px; cursor:pointer; font-weight:700; border:1px solid rgba(41,227,255,.45);
+                  background:rgba(10,20,30,.8); color:#cfe9f2; }
+  .gm-row button[type=submit]{ background:#29e3ff; color:#04222b; border-color:#29e3ff; }
+  #stopBtn{
+    position:fixed; left:50%; transform:translateX(-50%); bottom:24px; z-index:42; display:none;
+    padding:8px 16px; border-radius:20px; cursor:pointer; font-size:13px; font-weight:700;
+    background:rgba(255,93,108,.18); border:1px solid #ff5d6c; color:#ffd6db;
+  }
+  #stopBtn.show{ display:block; }
+  #presentBtn:hover{ background:rgba(41,227,255,.14); }
+  #presentBtn.active{ background:#ffcf4d; color:#2b2204; border-color:#ffcf4d; }
+  #typeForm{ margin-top:10px; }
+  #typeInput{
+    width:100%; box-sizing:border-box; padding:9px 12px; border-radius:10px;
+    background:rgba(10,20,30,.72); border:1px solid rgba(41,227,255,.35);
+    color:#eaffff; font-size:14px; outline:none;
+  }
+  #typeInput:focus{ border-color:#29e3ff; box-shadow:0 0 10px rgba(41,227,255,.35); }
+  #miniBtn:hover, #voiceBtn:hover{ background:rgba(41,227,255,.14); }
+  #miniBtn.active{ background:#29e3ff; color:#04222b; border-color:#29e3ff; }
+  #voiceBtn.active{ border-color:#31e07a; color:#bff5d4; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <div class="title">J.A.R.V.I.S.</div>
+  <p>자비스를 준비하고 있어요... 잠시만요.</p>
+  <button id="enableBtn">시스템 시작</button>
+</div>
+
+<div class="frame">
+  <div class="header">
+    <div class="title">J.A.R.V.I.S.</div>
+    <div class="clock">
+      <div id="clockTime">00:00:00</div>
+      <div id="clockDate">----.--.--</div>
+    </div>
+  </div>
+
+  <div class="panel" data-label="MAIN">
+    <div id="consoleBox"></div>
+    <form id="typeForm" autocomplete="off">
+      <input id="typeInput" type="text" placeholder="⌨ 여기에 입력해도 돼요 (Enter)">
+    </form>
+  </div>
+
+  <div class="panel center" data-label="CORE">
+    <div class="ring" id="ring">
+      <div class="mic-dot" id="micDot"></div>
+    </div>
+    <div class="waveform" id="waveform">
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="state-text" id="stateText">SLEEP MODE</div>
+    <div class="sub-text">그냥 말하면 바로 실행돼요</div>
+    <div class="transcript" id="transcriptText"></div>
+    <div class="reply" id="replyText"></div>
+  </div>
+
+  <div class="panel" data-label="SYSTEM">
+    <div class="stat-row">
+      <div class="stat-label"><span>CPU</span><span id="cpuVal">--%</span></div>
+      <div class="bar-outer"><div class="bar-inner" id="cpuBar"></div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label"><span>MEMORY</span><span id="memVal">--%</span></div>
+      <div class="bar-outer"><div class="bar-inner" id="memBar"></div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label"><span>UPTIME</span><span id="uptimeVal">--</span></div>
+    </div>
+    <div class="net-status" id="netStatus"><span class="dot-online"></span>NETWORK ONLINE</div>
+  </div>
+
+  <div class="footer">
+    <div><span id="footerLeft">JARVIS LOCAL CONSOLE v1.1</span><span id="phoneBadge">📱 폰 연결</span></div>
+    <div id="footerRight">MIC: <span id="micState">OFF</span></div>
+  </div>
+</div>
+
+<div id="infoCards" aria-live="polite"></div>
+
+<div id="geminiBox"><span class="g-dot g-off"></span>Gemini 확인 중...</div>
+
+<button id="miniBtn" type="button" title="항상 위에 뜨는 작은 자비스">🟦 미니 자비스</button>
+<button id="voiceBtn" type="button" title="내 목소리에만 반응하게 등록">🎙 목소리 등록</button>
+<button id="presentBtn" type="button" title="'자비스'라고 부를 때만 대답 (발표할 때)">🎤 발표 모드</button>
+<button id="stopBtn" type="button" title="자비스 말 끊기 (Esc)">⏹ 그만 (Esc)</button>
+<button id="deviceBtn" type="button" title="마이크·스피커 고르기 (헤드폰 마이크 + 노트북 스피커처럼 따로)">🎧 마이크·스피커</button>
+<div id="deviceModal"><div class="dv-box">
+  <div class="gm-title">🎧 마이크 · 스피커 고르기</div>
+  <label class="dv-label">마이크 (내 말을 들을 장치)</label><select id="micSel"></select>
+  <label class="dv-label">스피커 (자비스 목소리가 나올 장치)</label><select id="spkSel"></select>
+  <div class="dv-tip">발표 팁: 마이크는 헤드폰, 스피커는 노트북이나 외부 스피커로 하면 청중도 자비스 목소리를 들을 수 있어요.</div>
+  <div class="gm-row"><button type="button" id="spkTest">🔊 스피커 시험</button><button type="button" id="deviceClose">닫기</button></div>
+</div></div>
+<button id="guestBtn" type="button" title="발표장에서 누구나 말해 볼 수 있게 (끌 때는 버튼 + 비밀번호)">👥 체험 모드</button>
+<div id="guestBadge">👥 체험 모드 · 누구나 말해 보세요</div>
+<div id="guestModal"><form id="guestForm" autocomplete="off">
+  <div class="gm-title">🔒 체험 모드 끄기</div>
+  <input id="guestPw" type="password" placeholder="비밀번호" autocomplete="off">
+  <div id="guestMsg"></div>
+  <div class="gm-row"><button type="button" id="guestCancel">취소</button><button type="submit">끄기</button></div>
+</form></div>
+
+
+<script>
+const consoleBox = document.getElementById('consoleBox');
+const stateText = document.getElementById('stateText');
+const transcriptText = document.getElementById('transcriptText');
+const replyText = document.getElementById('replyText');
+const ring = document.getElementById('ring');
+const micDot = document.getElementById('micDot');
+const waveform = document.getElementById('waveform');
+const micState = document.getElementById('micState');
+const overlay = document.getElementById('overlay');
+
+function log(msg, cls){
+  const line = document.createElement('div');
+  line.className = 'line ' + (cls||'');
+  const t = new Date().toLocaleTimeString('ko-KR', {hour12:false});
+  line.textContent = '[' + t + '] ' + msg;
+  consoleBox.appendChild(line);
+  consoleBox.scrollTop = consoleBox.scrollHeight;
+  while(consoleBox.children.length > 200){ consoleBox.removeChild(consoleBox.firstChild); }
+}
+
+// clock
+function tickClock(){
+  const now = new Date();
+  document.getElementById('clockTime').textContent = now.toLocaleTimeString('ko-KR', {hour12:false});
+  document.getElementById('clockDate').textContent = now.toLocaleDateString('ko-KR');
+}
+setInterval(tickClock, 1000); tickClock();
+
+// system stats
+// 서버가 꺼졌다 다시 켜지면(토큰이 새로 바뀜) 화면을 새로 불러 자동으로 다시 연결
+let statsFails = 0;
+async function refreshToken(){
+  try{
+    const html = await (await fetch('/', { cache: 'no-store' })).text();
+    const m = html.match(/JARVIS_TOKEN="([^"]+)"/);
+    if(m){ window.JARVIS_TOKEN = m[1]; return true; }
+  }catch(e){}
+  return false;
+}
+let _refreshing = false;
+async function reloadForNewServer(){
+  if(typeof DORMANT !== 'undefined' && DORMANT) return;   // 쉬는 창은 다시 살아나지 않음
+  if(_refreshing) return;
+  _refreshing = true;
+  try{
+    // 새로고침하면 브라우저가 소리 재생 허락을 잊어서(클릭 필요) 소리가 안 나므로, 연결 정보(토큰)만 새로 받음
+    if(await refreshToken()){ statsFails = 0; log('서버가 다시 켜져서 이어서 들을게요.', 'sys'); stateText.textContent = awake ? 'ACTIVE' : 'SLEEP MODE'; return; }
+  }finally{ _refreshing = false; }
+  try{
+    const last = +(sessionStorage.getItem('jv_reload') || 0);
+    if(Date.now() - last < 15000) return;   // 새로고침이 반복되지 않게
+    sessionStorage.setItem('jv_reload', String(Date.now()));
+  }catch(e){}
+  location.reload();
+}
+async function fetchStats(){
+  try{
+    const r = await fetch('/stats', { headers: { 'X-Jarvis-Token': window.JARVIS_TOKEN || '' } });
+    if(r.status === 403){ reloadForNewServer(); return; }
+    if(statsFails >= 2){ reloadForNewServer(); return; }
+    statsFails = 0;
+    const d = await r.json();
+    document.getElementById('cpuVal').textContent = d.cpu + '%';
+    document.getElementById('cpuBar').style.width = d.cpu + '%';
+    document.getElementById('memVal').textContent = d.mem + '%';
+    document.getElementById('memBar').style.width = d.mem + '%';
+    document.getElementById('uptimeVal').textContent = d.uptime;
+    updateGeminiBox(d.gemini);
+    if(d.version){ const fl=document.getElementById('footerLeft'); if(fl) fl.textContent = 'JARVIS v' + d.version; }
+    if(typeof d.voice_enrolled === 'number') updateVoiceBtn(d.voice_enrolled);
+    setGuestUi(!!d.guest);
+    // 이 탭이 열려 있는 동안 백그라운드에서 "hey jarvis"가 감지되면 서버가 다음
+    // 폴링 때 wake:true를 보내줍니다 (새 탭을 또 열지 않고 이 탭을 깨웁니다).
+    // 박수/헤이 자비스는 화면을 켤 때만 쓰는 기능이라, 화면이 켜진 뒤에는 무시함
+    // 서버가 백그라운드에서 보안 문제(Defender/방화벽 등)를 발견하면 여기로 전달됩니다.
+    if(d.security_alerts && d.security_alerts.length){
+      d.security_alerts.forEach(msg => announceSecurityAlert(msg));
+    }
+  }catch(e){
+    statsFails++;
+    if(statsFails === 2){
+      log('서버 연결이 끊겼어요. 서버가 다시 켜지면 화면이 자동으로 다시 연결돼요.', 'err');
+      stateText.textContent = 'RECONNECTING...';
+    }
+  }
+}
+// 체험(손님) 모드 표시: 켜져 있는 동안 위쪽 배지 + 버튼 초록색 (시간 제한 없음)
+let GUEST_MODE = false;
+function setGuestUi(on){
+  GUEST_MODE = on;
+  const b = document.getElementById('guestBtn'), g = document.getElementById('guestBadge');
+  if(b){ b.classList.toggle('active', on); b.textContent = on ? '👥 체험 모드 ON' : '👥 체험 모드'; }
+  if(g){ g.classList.toggle('show', on); }
+  ['deviceBtn', 'presentBtn', 'voiceBtn', 'miniBtn'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.style.display = on ? 'none' : '';
+  });
+}
+let statsInterval = setInterval(fetchStats, 3000); fetchStats();
+// 화면을 닫을 때 서버에 알림 (그래야 박수/헤이 자비스로 새 창을 다시 열 수 있음)
+function sayBye(){
+  try{ fetch('/bye', { method:'POST', keepalive:true, headers:{ 'X-Jarvis-Token': window.JARVIS_TOKEN || '' } }); }catch(e){}
+}
+window.addEventListener('pagehide', sayBye);
+
+// 우하단 AI 남은 요청량 표시 갱신 (활성 제공자: Groq / Gemini)
+function updateGeminiBox(g){
+  const box = document.getElementById('geminiBox');
+  if(!box) return;
+  if(!g || !g.enabled){
+    box.innerHTML = '<span class="g-dot g-off"></span>AI 미연결 (규칙 기반)';
+    return;
+  }
+  if(g.claude){
+    const c = g.claude;
+    box.innerHTML = '<span class="g-dot ' + (c.ok ? 'g-green' : 'g-yellow') + '"></span>Claude ' + c.model +
+      (c.ok ? ' · 오늘 대화 <b>' + c.calls + '</b>번' : ' 잠시 쉬는 중' + (c.fallback ? ' → ' + c.fallback + '로 대답' : ''));
+    return;
+  }
+  const name = g.provider || 'AI';
+  if(g.exhausted){
+    box.innerHTML = '<span class="g-dot g-red"></span>' + name + ' 오늘 한도 소진 · 내일 리셋';
+    return;
+  }
+  const pct = g.limit ? Math.round(g.remaining / g.limit * 100) : 0;
+  const cls = g.remaining <= 0 ? 'g-red' : (pct <= 15 ? 'g-yellow' : 'g-green');
+  box.innerHTML = '<span class="g-dot ' + cls + '"></span>' + name + ' 남은 요청 <b>' +
+    g.remaining + '</b> / ' + g.limit + ' (오늘)';
+}
+
+function updateNet(){
+  const el = document.getElementById('netStatus');
+  if(navigator.onLine){
+    el.innerHTML = '<span class="dot-online"></span>NETWORK ONLINE';
+  }else{
+    el.innerHTML = '<span class="dot-offline"></span>NETWORK OFFLINE';
+  }
+}
+window.addEventListener('online', updateNet);
+window.addEventListener('offline', updateNet);
+updateNet();
+
+// speech synthesis
+// 스피커로 말하는 동안 마이크가 그 소리를 다시 자기 말로 알아듣고 서버에 보내는
+// 에코 피드백 루프를 막기 위한 장치입니다. 세 겹으로 막습니다:
+//  1) ttsSpeaking: TTS가 나오는 동안 인식 결과를 전부 무시
+//  2) echoGuardUntil: TTS가 끝난 뒤에도 이 시각까지는 무시 (음성 인식 지연으로
+//     TTS 소리가 조금 늦게 인식되어 들어오는 것을 차단)
+//  3) lastSpokenText: 자비스가 방금 말한 문장과 같은 말은 명령으로 처리하지 않음
+let ttsSpeaking = false;
+let echoGuardUntil = 0;
+let lastSpokenText = '';
+const ECHO_GUARD_MS = 350; // TTS가 끝난 뒤 이 시간(ms) 동안 들어오는 인식 결과는 자기 목소리로 보고 무시 (짧을수록 인사 직후 빨리 받음)
+
+// 비교용으로 공백/문장부호를 없애고 소문자로 바꿉니다.
+function normalizeSpeech(s){
+  return (s || '').toLowerCase().replace(/[\s.,!?~…'"]/g, '');
+}
+// 방금 자비스가 말한 문장과 같은(또는 그 안에 포함되는) 말이면 에코로 간주합니다.
+// 단, 자비스가 말을 끝낸 직후(ECHO_TEXT_WINDOW_MS)만 봅니다. 예전엔 시간 제한이 없어서
+// 자비스가 "날씨나 음악…"이라고 한 뒤 보스가 "음악"이라고 하면 자기 목소리로 착각해 무시했어요.
+const ECHO_TEXT_WINDOW_MS = 2500;
+let ttsEndedAt = 0;
+function isEcho(text){
+  if(Date.now() < echoGuardUntil || ttsSpeaking) return true;
+  if(Date.now() - ttsEndedAt > ECHO_TEXT_WINDOW_MS) return false;
+  const t = normalizeSpeech(text);
+  const spoken = normalizeSpeech(lastSpokenText);
+  if(t.length >= 6 && spoken && spoken.includes(t)) return true;
+  if(spoken.length >= 6 && t.includes(spoken)) return true;
+  // 한두 글자 다르게 받아써도('비서'→'픽서') 자비스가 방금 한 말의 두 글자 묶음이 대부분 겹치면 자기 목소리
+  if(t.length >= 8 && spoken){
+    let hit = 0;
+    for(let i = 0; i < t.length - 1; i++){ if(spoken.includes(t.slice(i, i + 2))) hit++; }
+    if(hit / (t.length - 1) >= 0.8) return true;
+  }
+  return false;
+}
+
+// 남성 목소리 선택: 브라우저/OS에 설치된 음성 목록에서 이름에 남성을 암시하는
+// 키워드가 들어간 것을 우선 찾습니다. 못 찾아도 pitch를 낮춰서 좀 더 저음으로
+// 들리게 보정합니다. getVoices()는 비동기로 채워질 수 있어 이벤트도 같이 듣습니다.
+let cachedVoices = [];
+function refreshVoices(){
+  try{ cachedVoices = speechSynthesis.getVoices() || []; }catch(e){ cachedVoices = []; }
+}
+refreshVoices();
+if('onvoiceschanged' in speechSynthesis){
+  speechSynthesis.onvoiceschanged = refreshVoices;
+}
+
+// 화면에는 "선택된 음성" 2줄만 짧게 남기고, 전체 목록(100개+)은 콘솔(F12)로만
+// 보냅니다. 앱이 다 준비된 뒤(startListening) 딱 한 번 안전하게 호출됩니다.
+let _voiceInfoShown = false;
+function logSelectedVoicesOnce(){
+  if(_voiceInfoShown || typeof log !== 'function') return;
+  if(!cachedVoices.length) return; // 아직 음성 목록이 안 채워졌으면 다음 기회에
+  _voiceInfoShown = true;
+  try{
+    const kv = pickVoice('ko-KR'), ev = pickVoice('en-US');
+    log('선택된 한국어 음성: ' + (kv ? kv.name : '(기본)'), 'sys');
+    log('선택된 영어 음성: ' + (ev ? ev.name : '(기본)'), 'sys');
+    console.log('[JARVIS] 전체 음성 목록:', cachedVoices.map(v => v.name + ' (' + v.lang + ')'));
+  }catch(e){ console.log('음성 정보 표시 오류', e); }
+}
+
+// 언어별 "선호 음성" 우선순위. 위에서부터 이름에 이 단어가 들어간 음성을 먼저
+// 찾아서 씁니다. 다른 목소리로 바꾸고 싶으면 이 줄의 이름만 바꾸면 됩니다.
+// (설치된 이름 목록은 화면 로그의 "설치된 ~ 음성:" 줄 참고. 예: '인준','현수','Guy','David')
+// 주의: 'Online (Natural)' 음성은 인터넷이 필요하고 Edge에서 가장 잘 나옵니다.
+const PREFERRED_VOICES = {
+  // 아이언맨 자비스 느낌 = 영국식 남성 신경망 음성. Ryan(영국)이 가장 비슷합니다.
+  // 원하는 이름으로 순서를 바꾸면 됩니다. (설치된 목록은 화면 로그 "설치된 ~ 음성:" 참고)
+  ko: ['인준', 'injoon', '현수 multilingual', 'hyunsu', '봉진', '국민'],   // 한국어 남성 (서버 목소리와 같은 인준 우선)
+  en: ['eric online', 'steffan online', 'ryan online', 'thomas online', 'brian online', 'andrew online', 'david'], // 차분한 남성 우선
+};
+const MALE_VOICE_HINTS = {
+  ko: ['인준', 'injoon', '현수', 'hyunsu', '봉진', '국민', 'male', '남성'],
+  en: ['david', 'guy', 'mark', 'andrew', 'brian', 'daniel', 'male', 'man'],
+};
+const FEMALE_VOICE_HINTS_RE = /(female|zira|sunhi|선히|heami|해미|susan|samantha|여성)/i;
+
+function pickVoice(lang){
+  const wantKo = lang.startsWith('ko');
+  const prefix = wantKo ? 'ko' : 'en';
+  const candidates = cachedVoices.filter(v => v.lang && v.lang.toLowerCase().startsWith(prefix));
+  if(!candidates.length) return null;
+  // 1) 선호 음성 우선순위대로 먼저 찾기
+  const prefs = wantKo ? PREFERRED_VOICES.ko : PREFERRED_VOICES.en;
+  for(const p of prefs){
+    const found = candidates.find(v => v.name.toLowerCase().includes(p.toLowerCase()));
+    if(found) return found;
+  }
+  // 2) 못 찾으면 남성 힌트 → 여성 아닌 것 → 아무거나
+  const hints = wantKo ? MALE_VOICE_HINTS.ko : MALE_VOICE_HINTS.en;
+  const byHint = candidates.find(v => hints.some(h => v.name.toLowerCase().includes(h.toLowerCase())));
+  if(byHint) return byHint;
+  const notFemale = candidates.find(v => !FEMALE_VOICE_HINTS_RE.test(v.name));
+  return notFemale || candidates[0];
+}
+
+// 목소리 톤 조절: 값을 바꾸면 자비스 말투가 달라집니다.
+//  - TTS_RATE : 말 속도. 클수록 빠르고 활발함 (기본 1.0, 범위 대략 0.8~1.5)
+//  - TTS_PITCH: 음 높이. 클수록 밝고 경쾌함, 작을수록 저음/묵직함 (기본 1.0, 범위 0~2)
+// 더 차분하게: RATE 1.0 / PITCH 0.85,  더 활발하게: RATE 1.2 / PITCH 1.1
+const TTS_RATE = 1.25;
+const TTS_PITCH = 0.92;
+
+// USE_SERVER_TTS = true 이면 서버의 edge-tts(자연스러운 신경망 음성)로 말하고,
+// 서버가 못 만들면(미설치 등) 자동으로 브라우저 내장 음성으로 폴백합니다.
+const USE_SERVER_TTS = true;
+let _ttsAudio = null;
+let _serverTtsRetryAt = 0; // 서버 목소리가 실패하면 2분 동안은 브라우저 목소리로 말하고 그 뒤 다시 시도
+
+function _ttsStart(text){
+  ttsSpeaking = true;
+  const sb = document.getElementById('stopBtn'); if(sb) sb.classList.add('show');
+  lastSpokenText = text;
+  waveform.classList.add('speaking');
+}
+function _ttsEnd(onDone){
+  ttsSpeaking = false;
+  const sb = document.getElementById('stopBtn'); if(sb) sb.classList.remove('show');
+  echoGuardUntil = Date.now() + ECHO_GUARD_MS;
+  ttsEndedAt = Date.now();
+  waveform.classList.remove('speaking');
+  if(onDone) onDone();
+}
+
+// 텍스트 내용으로 언어 판별 (영문 알파벳이 한글보다 많으면 영어)
+function detectLang(text){
+  let ko=0, en=0;
+  for(const c of (text||'')){
+    if(c >= '가' && c <= '힣') ko++;
+    else if(/[a-zA-Z]/.test(c)) en++;
+  }
+  return en > ko ? 'en-US' : 'ko-KR';
+}
+
+// 브라우저 내장 음성으로 말하기 (폴백)
+function speakBrowser(text, lang, onDone){
+  try{
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = detectLang(text);   // 넘어온 lang이 아니라 실제 글자로 판별
+    u.rate = TTS_RATE;
+    u.pitch = TTS_PITCH;
+    const voice = pickVoice(u.lang);
+    if(voice) u.voice = voice;
+    _ttsStart(text);
+    const stop = () => _ttsEnd(onDone);
+    u.onend = stop;
+    u.onerror = stop;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }catch(e){ _ttsEnd(onDone); }
+}
+
+// === 말하는 중 끊기 ===
+// ⏹ 버튼 / Esc 키 / 가운데 원 클릭 / 보스 목소리로 "그만" → 즉시 조용히
+let speakGen = 0;   // 끊으면 1 올려서, 이어 말하려던 나머지 문장(번역 등)도 취소
+function stopSpeaking(reason){
+  if(!ttsSpeaking && !(_ttsAudio && !_ttsAudio.paused)) return false;
+  speakGen++;
+  try{ if(_ttsAudio){ _ttsAudio.onended = null; _ttsAudio.onerror = null; _ttsAudio.pause(); } }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){}
+  ttsSpeaking = false;
+  echoGuardUntil = Date.now() + 300;
+  waveform.classList.remove('speaking');
+  const sb = document.getElementById('stopBtn'); if(sb) sb.classList.remove('show');
+  if(reason !== '새 명령') log('⏹ 말하기를 멈췄어요' + (reason ? ' (' + reason + ')' : ''), 'sys');
+  if(awake) armListenWindow();
+  return true;
+}
+const STOP_SPEAK_RE = /^(자비스\s*)?(그만|그만해|그만해요|멈춰|스톱|stop|조용|조용히\s*해|됐어|됐다|알았어|알겠어|쉿|닥쳐|오케이|ok|okay)[\s.!~]*$/i;
+
+// 서버 edge-tts로 말하기 → 실패하면 브라우저 음성으로 폴백
+// 목소리 조각을 받는 대로 브라우저 오디오에 바로 넣어서 재생 (끝까지 만들어질 때까지 기다리지 않음)
+function waitUpdate(sb){ return sb.updating ? new Promise(r => sb.addEventListener('updateend', r, { once: true })) : Promise.resolve(); }
+// 브라우저가 소리 재생을 막으면(클릭 없이 새로 열린 화면 등) 멈춰 있지 말고 안내 → 한 번 클릭하면 그 말을 다시 함
+let _blockedSpeech = null, _unblockArmed = false;
+function audioBlocked(text, lang){
+  _blockedSpeech = { text, lang };
+  transcriptText.textContent = '🔇 브라우저가 소리를 막았어요. 화면을 아무 데나 한 번 클릭하면 소리가 나와요.';
+  log('🔇 브라우저가 소리를 막았어요. 화면을 한 번 클릭해 주세요 (한 번만 하면 돼요).', 'err');
+  if(_unblockArmed) return;
+  _unblockArmed = true;
+  const unlock = () => {
+    _unblockArmed = false;
+    document.removeEventListener('pointerdown', unlock, true);
+    document.removeEventListener('keydown', unlock, true);
+    try{ if(audioCtx && audioCtx.state !== 'running') audioCtx.resume(); }catch(e){}
+    const s = _blockedSpeech; _blockedSpeech = null;
+    if(transcriptText.textContent.startsWith('🔇')) transcriptText.textContent = '';
+    if(s) SPEECH.add(s.text, s.lang);
+  };
+  document.addEventListener('pointerdown', unlock, true);
+  document.addEventListener('keydown', unlock, true);
+}
+
+async function speak(text, lang, onDone, preFetched){
+  if(!text){ if(onDone) onDone(); return; }
+  const targetLang = lang || 'ko-KR';
+  if(!(USE_SERVER_TTS && Date.now() >= _serverTtsRetryAt)){ return speakBrowser(text, targetLang, onDone); }
+  _ttsStart(text);   // 목소리가 나오는 동안 마이크가 자기 목소리를 듣지 않게 미리 잠금
+  const myGen = speakGen;
+  const code = /^(ko|en)/.test(targetLang) ? targetLang.slice(0, 2) : targetLang;
+  const url = '/tts_stream?lang=' + encodeURIComponent(code) + '&t=' + encodeURIComponent(window.JARVIS_TOKEN || '') +
+              '&text=' + encodeURIComponent(text.slice(0, 1500));
+  try{ if(_ttsAudio){ _ttsAudio.onended = null; _ttsAudio.onerror = null; _ttsAudio.pause(); } }catch(e){}
+  const audio = new Audio();
+  _ttsAudio = audio;
+  const spkId = loadPref('jarvisSpk');
+  if(spkId && audio.setSinkId){ try{ await audio.setSinkId(spkId); }catch(e){ /* 없어진 스피커면 기본 스피커 */ } }
+  let done = false;
+  const finish = () => { if(!done && myGen === speakGen){ done = true; _ttsEnd(onDone); } };
+  const fallback = () => {   // 서버 목소리 실패 → 브라우저 목소리로 대신
+    if(done || myGen !== speakGen) return; done = true;
+    _serverTtsRetryAt = Date.now() + 120000;
+    ttsSpeaking = false; waveform.classList.remove('speaking');
+    speakBrowser(text, targetLang, onDone);
+  };
+  audio.onended = finish;
+  const blocked = (err) => {   // 재생 거부(NotAllowedError) → 말하는 중 상태를 풀어서 듣기도 다시 되게
+    if(!err || err.name !== 'NotAllowedError' || done || myGen !== speakGen) return;
+    done = true;
+    audioBlocked(text, targetLang);
+    _ttsEnd(onDone);
+  };
+  try{
+    const resp = await (preFetched || fetch(url));
+    if(!resp.ok || !resp.body) throw new Error('tts ' + resp.status);
+    if(myGen !== speakGen) return;
+    if(window.MediaSource && MediaSource.isTypeSupported('audio/mpeg')){
+      const ms = new MediaSource();
+      audio.src = URL.createObjectURL(ms);
+      await new Promise(r => ms.addEventListener('sourceopen', r, { once: true }));
+      const sb = ms.addSourceBuffer('audio/mpeg');
+      try{ sb.mode = 'sequence'; }catch(e){}
+      const reader = resp.body.getReader();
+      let started = false, got = 0;
+      const START_BYTES = 6000;    // 약 1초 분량을 모은 뒤 시작 (예전 2초 → 첫 소리가 빨라짐, 서버가 문장별로 미리 만들어서 안 끊김)
+      while(true){
+        const { done: end, value } = await reader.read();
+        if(myGen !== speakGen){ try{ reader.cancel(); }catch(e){} return; }
+        if(end) break;
+        await waitUpdate(sb); sb.appendBuffer(value); await waitUpdate(sb);
+        got += value.length;
+        if(!started && got >= START_BYTES){ started = true; audio.play().catch(blocked); }
+      }
+      await waitUpdate(sb);
+      try{ ms.endOfStream(); }catch(e){}
+      if(!got) throw new Error('empty');
+      if(!started){ started = true; audio.play().catch(blocked); }   // 짧은 대답은 다 받은 뒤 바로
+    }else{
+      // 이 브라우저가 조각 재생을 못 하면 다 받은 뒤 재생
+      audio.src = URL.createObjectURL(await resp.blob());
+      if(myGen !== speakGen) return;
+      try{ await audio.play(); }catch(err){ if(err && err.name === 'NotAllowedError'){ blocked(err); return; } throw err; }
+    }
+  }catch(e){
+    fallback();
+  }
+}
+
+// state machine
+// 한 번 깨우면(웨이크 워드/박수) 계속 깨어 있으면서 이어지는 명령들을 처리하고,
+// LISTEN_WINDOW_MS 동안 아무 말도 없을 때에만 다시 SLEEP(대기)로 돌아갑니다.
+// (명령마다 매번 웨이크 문구를 다시 말할 필요가 없습니다.)
+let awake = false;
+let sleepTimer = null;
+const LISTEN_WINDOW_MS = 10000; // "자비스"로 깨우거나 버튼을 뗀 뒤 이 시간 동안 이어서 명령 가능 (지나면 대기)
+const REPLY_LINGER_MS = 1200;   // (참고) 예전에 명령 처리 후 바로 SLEEP로 갈 때 쓰던 값 - 지금은 사용하지 않음
+
+// === 웨이크워드 설정 ===
+// REQUIRE_WAKE_WORD = true : "자비스 ~" 라고 부를 때만 명령 실행 (주변 대화 무시, 안전)
+// REQUIRE_WAKE_WORD = false: "자비스" 없이 그냥 말하면 바로 실행 (편하지만 주변 소리에도 반응)
+// 발표 모드 = "자비스"라고 부를 때만 대답 (발표 중 청중에게 하는 말에 끼어들지 않게).
+// 버튼 또는 "발표 모드 켜줘/꺼줘"로 바꾸고, 다음에 열어도 기억합니다.
+let REQUIRE_WAKE_WORD = false;
+try{ REQUIRE_WAKE_WORD = localStorage.getItem('jarvisPresent') === '1'; }catch(e){}
+const ALWAYS_ON = false;
+
+// 명령을 들어도 곧장 실행하지 않고, 이 시간 동안 추가로 말이 없으면 그때까지
+// 들은 내용을 명령으로 실행합니다. (짧을수록 즉각 실행, 너무 짧으면 문장이 끊길 수 있음)
+// 말이 멈춘 뒤 이만큼 지나면 실행합니다. 말하는 중(중간 인식)에는 자동으로 미뤄집니다.
+const COMMAND_SILENCE_MS = 900;
+let pendingCommandText = '';
+let pendingCommandTimer = null;
+
+// 명령을 실제로 실행하기 시작한 뒤에는, 서버 응답이 느리거나 오류가 나거나 등
+// 무슨 일이 있어도 이 시간 안에는 반드시 다시 "hey jarvis"를 들을 수 있는 상태로
+// 돌아가도록 하는 안전장치입니다 (정상 처리라면 이보다 훨씬 먼저 돌아갑니다).
+const COMMAND_HARD_TIMEOUT_MS = 27000; // fetch 타임아웃(25초)보다 살짝 길게
+let commandWatchdog = null;
+
+function armCommandWatchdog(){
+  if(commandWatchdog) clearTimeout(commandWatchdog);
+  commandWatchdog = setTimeout(()=>{
+    if(ALWAYS_ON){
+      // 항상 듣기 모드에선 잠들지 않고, 밀린 입력만 비우고 계속 대기합니다.
+      pendingCommandText = '';
+      transcriptText.textContent = '';
+      return;
+    }
+    log('명령 처리가 지연되어 안전 장치로 다시 대기 모드로 전환합니다.', 'sys');
+    setAwake(false);
+  }, COMMAND_HARD_TIMEOUT_MS);
+}
+
+function setAwake(v){
+  awake = v;
+  if(v){
+    ring.classList.add('awake');
+    micDot.classList.add('live');
+    waveform.classList.add('active');
+    stateText.textContent = 'ACTIVE';
+  } else {
+    ring.classList.remove('awake');
+    micDot.classList.remove('live');
+    waveform.classList.remove('active');
+    stateText.textContent = 'SLEEP MODE';
+    replyText.textContent = '';
+    transcriptText.textContent = '';
+    if(sleepTimer) clearTimeout(sleepTimer);
+    if(pendingCommandTimer) clearTimeout(pendingCommandTimer);
+    if(commandWatchdog) clearTimeout(commandWatchdog);
+    pendingCommandTimer = null;
+    pendingCommandText = '';
+    commandWatchdog = null;
+  }
+}
+
+// 웨이크 문구만 듣고 아직 명령이 없는 상태: 다음 한 마디를 기다리되, 시간 안에
+// 아무 말도 없으면 다시 SLEEP로 돌아가 다음에도 웨이크 문구를 다시 요구합니다.
+function armListenWindow(){
+  if(ALWAYS_ON) return; // 항상 듣기 모드에선 시간이 지나도 잠들지 않습니다.
+  if(sleepTimer) clearTimeout(sleepTimer);
+  sleepTimer = setTimeout(()=>{
+    if(REQUIRE_WAKE_WORD) log('잠시 대기할게요. 다시 부르려면 "자비스"라고 불러 주세요.', 'sys');
+    setAwake(false);
+  }, LISTEN_WINDOW_MS);
+}
+
+// 명령이 될 만한 말을 들을 때마다 여기로 쌓입니다. 새로 들어오는 말이 있을 때마다
+// 타이머를 다시 시작해서, COMMAND_SILENCE_MS(5초) 동안 더 이상 말이 없을 때
+// 그동안 들은 내용 전체를 하나의 명령으로 실행합니다.
+// 쌓인 명령을 실제로 실행합니다.
+function runPendingNow(){
+  const text = (pendingCommandText || '').trim();
+  pendingCommandText = '';
+  if(pendingCommandTimer){ clearTimeout(pendingCommandTimer); pendingCommandTimer = null; }
+  if(text) runCommand(text); else if(!ALWAYS_ON) setAwake(false);
+}
+
+// 실행 타이머를 (다시) 겁니다. 말하는 중(중간 인식 결과)에도 호출되어, 말이 멈출
+// 때까지 실행을 미룹니다. 그래서 대기 시간을 짧게 둬도 문장이 중간에 잘리지 않습니다.
+function scheduleCommandRun(){
+  if(pendingCommandTimer) clearTimeout(pendingCommandTimer);
+  pendingCommandTimer = setTimeout(runPendingNow, COMMAND_SILENCE_MS);
+}
+
+// 아직 말 중이면(중간 인식 결과가 들어오면) 실행을 미룹니다 - 문장 잘림 방지.
+function keepListeningIfSpeaking(){
+  if(pendingCommandTimer) scheduleCommandRun();
+}
+
+function queueCommandSpeech(chunk){
+  if(!chunk) return;
+  if(sleepTimer) clearTimeout(sleepTimer); // "명령을 기다리는 중" 타임아웃은 더 이상 필요 없음
+  pendingCommandText = (pendingCommandText + ' ' + chunk).trim();
+  transcriptText.textContent = '"' + pendingCommandText + '"';
+  scheduleCommandRun();
+}
+
+// 종료류 명령("자비스 그만"/"셧다운")은 5초 대기 없이 즉시 처리합니다. 듣기를
+// 멈추라는 뜻이므로 지연되면 오히려 어색합니다. 그 외의 말은 5초 대기 버퍼로 보냅니다.
+function handleCommandChunk(t){
+  if(!t) return;
+  if(isShutdownCmd(t)){ shutdownAssistant(); return; }
+  // 항상 듣기 모드: 한 호흡에 이어 말한 것을 하나로 묶기 위해 짧게(COMMAND_SILENCE_MS)
+  // 기다렸다 실행합니다. (SLEEP_RE 판정은 하지 않음 - "꺼"가 "크롬 꺼줘"와 겹치므로)
+  if(ALWAYS_ON){
+    queueCommandSpeech(t);
+    return;
+  }
+  if(SLEEP_RE.test(t)){
+    log('슬립 명령 감지.', 'sys');
+    setAwake(false);
+    return;
+  }
+  queueCommandSpeech(t);
+}
+
+// 명령을 하나 처리한 직후: SLEEP로 가지 않고 깨어 있는 상태를 유지합니다. 이어서
+// 다른 명령을 바로 말할 수 있고, LISTEN_WINDOW_MS 동안 아무 말도 없을 때에만
+// 그때 SLEEP로 돌아갑니다. (다음 명령마다 웨이크 문구를 다시 말할 필요 없음)
+function endCommandTurn(){
+  if(commandWatchdog) clearTimeout(commandWatchdog); // 명령이 정상 처리됐으니 안전장치 해제
+  commandWatchdog = null;
+  armListenWindow(); // 다시 "조용하면 잠드는" 타이머를 걺 (깨어 있는 상태는 유지)
+}
+
+// 시간대별 깨어날 때 인사말. 각 시간대에서 여러 문구 중 무작위로 하나를 말합니다.
+// 문구를 자유롭게 바꾸거나 추가하세요. 한국어로 바꾸려면 lang을 'ko-KR'로 하면 됩니다.
+// from~to 는 24시간제 시각(끝 포함). 밤(23~4)처럼 자정을 넘어가는 구간도 됩니다.
+const GREETINGS = [
+  { from: 5,  to: 11, lang: 'en-US', lines: ['Good morning, sir.', 'Good morning. How may I help you?'] },
+  { from: 12, to: 17, lang: 'en-US', lines: ['Good afternoon, sir.', 'Good afternoon. At your service.'] },
+  { from: 18, to: 22, lang: 'en-US', lines: ['Good evening, sir.', 'Good evening. How can I assist?'] },
+  { from: 23, to: 4,  lang: 'en-US', lines: ['Working late, sir?', 'Good evening, sir.'] },
+];
+function pickGreeting(){
+  const h = new Date().getHours();
+  let g = GREETINGS.find(x => (x.from <= x.to) ? (h >= x.from && h <= x.to) : (h >= x.from || h <= x.to));
+  if(!g) g = { lang: 'en-US', lines: ['Yes sir'] };
+  const text = g.lines[Math.floor(Math.random() * g.lines.length)];
+  return { text, lang: g.lang };
+}
+
+// 웨이크 워드를 들었을 때 실행하는 공통 처리. 세 가지 경로에서 모두 호출됩니다:
+// 1) 이 탭에서 직접 "자비스 온"/"hey jarvis"를 들었을 때 (마이크는 이미 켜진 상태)
+// 2) 탭이 닫혀 있다가 "hey jarvis"로 서버가 새로 열었을 때 (?awake=1)
+// 3) 이 탭이 SLEEP 상태로 열려 있는 동안 백그라운드에서 "hey jarvis"가 감지됐을 때
+function wakeUp(silent){
+  if(awake){ armListenWindow(); return; }
+  if(overlay.style.display !== 'none') overlay.style.display = 'none';
+  if(!shouldRun) startListening();
+  setAwake(true);
+  if(silent){ armListenWindow(); return; }  // 같은 말에 명령이 이어지면 인사 생략
+  const greet = pickGreeting();
+  replyText.textContent = greet.text;
+  speak(greet.text, greet.lang);
+  armListenWindow();
+}
+
+// 서버가 백그라운드에서 보안 문제(Defender/방화벽 등)를 발견하면 /stats 폴링을
+// 통해 여기로 전달됩니다. 자비스가 SLEEP 상태거나 방금 막 열린 새 탭이어도
+// "Yes sir" 없이 곧바로 경고를 알리고, 곧바로 이어서 명령할 수 있도록 짧게 열어둡니다.
+function announceSecurityAlert(message){
+  log(message, 'err');
+  if(overlay.style.display !== 'none') overlay.style.display = 'none';
+  if(!shouldRun) startListening();
+  setAwake(true);
+  replyText.textContent = message;
+  speak(message, 'ko-KR');
+  armListenWindow();
+}
+
+// "셧다운"을 들으면 인사를 하고 화면을 완전히 끕니다 (자비스 그만과 달리
+// 대기 모드로 돌아가지 않음). 브라우저는 스크립트가 직접 열지 않은 탭은
+// window.close()로 못 닫게 막는 경우가 대부분이라, 시도는 하되 안 닫히면
+// "이제 창을 닫아도 됩니다" 화면으로 넘어갑니다.
+function shutdownAssistant(){
+  log('"셧다운" 감지: 자비스를 종료합니다.', 'sys');
+  shouldRun = false;
+  if(sleepTimer) clearTimeout(sleepTimer);
+  if(pendingCommandTimer) clearTimeout(pendingCommandTimer);
+  if(commandWatchdog) clearTimeout(commandWatchdog);
+  if(statsInterval) clearInterval(statsInterval);
+  stopListening();
+  ring.classList.remove('awake');
+  micDot.classList.remove('live');
+  waveform.classList.remove('active');
+  stateText.textContent = 'OFFLINE';
+  transcriptText.textContent = '';
+
+  sayBye();
+  speak('Yes, good bye.', 'en-US', () => {
+    window.close();
+    setTimeout(()=>{
+      replyText.textContent = '이제 이 창을 닫으셔도 됩니다.';
+      document.title = 'J.A.R.V.I.S. (종료됨)';
+    }, 150);
+  });
+}
+
+// Whisper가 "자비스"를 "서비스/재비스/저비스" 등으로 잘못 듣는 경우가 많아, "OO비스/비쓰"
+// 형태(끝소리가 비슷한 말)를 폭넓게 웨이크워드로 인정합니다.
+const WAKE_RE = /([가-힣]?비[스쓰시])|jarvis/i;
+const WAKE_ON_RE = /(온|on|켜|hey)/i;
+// "자비스 그만"/"슬립 모드"처럼 명확한 종료 표현만 슬립으로 봅니다. 예전엔 "꺼"가
+// 들어가 "크롬 꺼줘"(프로그램 종료)까지 슬립으로 오작동했으므로 그 패턴을 뺐습니다.
+const SLEEP_RE = /(자비스\s*그만|그만\s*자비스|슬립\s*모드|대기\s*모드로)/i;
+// "자비스 그만"은 대기 모드로만 돌아가지만, "셧다운"은 인사를 하고 화면
+// 자체를 완전히 종료합니다.
+// 자비스 화면을 완전히 끄는 말: "셧다운"(발음 변형 폭넓게) 또는 "자비스 꺼/종료/끄기" 등
+const SHUTDOWN_APP_RE = /(셧|샷|셔|섯|숏|쇼트|쉿|shut)\s*(다운|따운|타운|down)|자비스\s*(를)?\s*(종료|꺼|끄기|끄)|비서\s*(종료|꺼)|(turn\s*off|shut\s*down|close)\s*jarvis/i;
+// Whisper가 "셧다운"을 잘못 받아쓴 모양들 (로그에서 실제로 나온 것: 샷다오, 셧다, 샷탈, 쇼트다운, 수업 다운).
+// 문장 전체가 이 말 하나일 때만 인정합니다 (긴 문장 속 비슷한 단어로 꺼지지 않게).
+const SHUTDOWN_SOUNDALIKE_RE = /^(셧|샷|셔|섯|숏|쇼트|쇼|쉿|샤|셔트|셜|수업|shut|shot)(다운|따운|타운|다오|다우|다|탈|딸|down|dawn|dow|da)(해|해줘|해요|하자)?$/i;
+function isShutdownCmd(text){
+  if(GUEST_MODE) return false;   // 체험 모드: 다른 사람이 '셧다운'해도 화면이 꺼지지 않음 (서버가 정중히 거절)
+  const t = (text || '').trim();
+  if(SHUTDOWN_APP_RE.test(t)) return true;
+  // "헤이 자비(스)" 같은 부르는 말과 문장부호·공백을 떼고 남은 말이 '셧다운'과 비슷한지
+  const core = t.replace(/^\s*((헤이|hey|하이)\s*)?(자비스?|재비스|jarvis)?\s*[,.!~]*/i, '')
+                .replace(/[\s.,!?~…'"]/g, '');
+  return SHUTDOWN_SOUNDALIKE_RE.test(core);
+}
+
+// 타이머는 서버 왕복 없이 브라우저에서 처리합니다. 종료 시각을 절대 시각(ms)으로
+// localStorage에 저장해두기 때문에, 탭을 새로고침하거나(완전히 닫지만 않으면)
+// 컴퓨터가 잠깐 절전했다 돌아와도 setTimeout 드리프트 없이 정확히 확인됩니다.
+// 단, 브라우저 탭 자체가 닫혀 있는 동안은 알림을 울릴 수 없고, 다음에 이 화면을
+// 다시 열었을 때 지난 타이머를 뒤늦게라도 알려줍니다.
+const TIMER_RE = /(\d+)\s*(시간|분|초)/;
+const TIMER_INTENT_RE = /(타이머|알람|알려줘|맞춰줘|뒤에|후에)/;
+const TIMER_STORAGE_KEY = 'jarvis_timers';
+
+function loadTimers(){
+  try{ return JSON.parse(localStorage.getItem(TIMER_STORAGE_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function saveTimers(list){
+  try{ localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(list)); }catch(e){}
+}
+function checkTimers(){
+  const timers = loadTimers();
+  if(!timers.length) return;
+  const now = Date.now();
+  const remaining = [];
+  for(const t of timers){
+    if(t.endAt <= now){
+      const doneMsg = t.label + ' 타이머가 종료되었습니다.';
+      log(doneMsg, 'sys');
+      replyText.textContent = doneMsg;
+      speak(doneMsg, 'ko-KR');
+    } else {
+      remaining.push(t);
+    }
+  }
+  if(remaining.length !== timers.length) saveTimers(remaining);
+}
+setInterval(checkTimers, 1000);
+checkTimers(); // 새로고침/재접속 시 이미 끝나 있던 타이머를 바로 알려줌
+
+function tryHandleTimer(text){
+  if(!TIMER_INTENT_RE.test(text)) return false;
+  const m = text.match(TIMER_RE);
+  if(!m) return false;
+  const n = parseInt(m[1], 10);
+  if(!n) return false;
+  const unit = m[2];
+  const msPerUnit = { '시간': 3600000, '분': 60000, '초': 1000 };
+  const ms = n * msPerUnit[unit];
+  const label = n + unit;
+
+  transcriptText.textContent = '"' + text + '"';
+  log(text, 'user');
+  const setReply = label + ' 타이머를 설정했습니다.';
+  replyText.textContent = setReply;
+  log(setReply, 'sys');
+  speak(setReply, 'ko-KR');
+
+  const timers = loadTimers();
+  timers.push({ label, endAt: Date.now() + ms });
+  saveTimers(timers);
+  return true;
+}
+
+// 자비스 말하기 줄: 대답이 연달아 와도 앞 말을 끝까지 하고 다음 말을 함 (중간에 끊지 않음).
+// 끊는 건 '그만'·⏹ 버튼·Esc 뿐. 다음 문장 목소리는 앞 문장을 말하는 동안 미리 받아 둠 (문장 사이 멈칫 없음).
+const SPEECH = (() => {
+  const q = [];
+  let busy = false, gen = -1, all = '';
+  const urlOf = (text, code) => '/tts_stream?lang=' + encodeURIComponent(code) + '&t=' + encodeURIComponent(window.JARVIS_TOKEN || '') +
+                                '&text=' + encodeURIComponent(text.slice(0, 1500));
+  let turn = 0;
+  const next = () => {
+    if(gen !== speakGen){ q.length = 0; busy = false; return; }   // '그만'으로 끊었으면 남은 말도 버림
+    const p = q.shift();
+    if(!p){ busy = false; all = ''; return; }
+    busy = true;
+    const my = ++turn;
+    // 안전장치: 소리가 안 나거나 끝 신호가 안 오면(네트워크·브라우저 문제) 멈춰 있지 않고 다음으로 + 다시 듣기
+    const guard = setTimeout(() => {
+      if(my !== turn) return;
+      log('(말하기가 멈춰 있어서 다음으로 넘어갔어요)', 'sys');
+      try{ if(_ttsAudio){ _ttsAudio.onended = null; _ttsAudio.pause(); } }catch(e){}
+      ttsSpeaking = false; waveform.classList.remove('speaking');
+      echoGuardUntil = Date.now() + ECHO_GUARD_MS; ttsEndedAt = Date.now();
+      next();
+    }, 10000 + p.text.length * 250);
+    speak(p.text, p.lang, () => { clearTimeout(guard); if(my === turn) next(); }, p.pre);
+    lastSpokenText = all;   // 자기 목소리 무시(에코) 판단은 지금까지 말한 전체로
+  };
+  return {
+    add(text, lang){
+      if(!text) return;
+      if(gen !== speakGen){ q.length = 0; busy = false; gen = speakGen; all = ''; }
+      all = (all + ' ' + text).trim().slice(-600);
+      const code = (lang || 'ko-KR');
+      const short = /^(ko|en)/.test(code) ? code.slice(0, 2) : code;
+      const pre = (busy && USE_SERVER_TTS) ? fetch(urlOf(text, short)).catch(() => null) : null;
+      q.push({ text, lang: code === 'ko' ? 'ko-KR' : code, pre: pre ? pre.then(r => r || fetch(urlOf(text, short))) : null });
+      if(!busy) next();
+    },
+  };
+})();
+
+// 대답 카드 (서버가 준 cards: [{icon, title, big, sub, items}])
+let cardTimer = null;
+function showCards(cards){
+  const box = document.getElementById('infoCards');
+  clearTimeout(cardTimer);
+  box.textContent = '';
+  if(!Array.isArray(cards) || !cards.length) return;
+  for(const c of cards.slice(0, 3)){
+    const el = document.createElement('div'); el.className = 'icard';
+    const add = (cls, txt, tag) => { if(!txt) return; const d = document.createElement(tag || 'div'); d.className = cls; d.textContent = txt; el.appendChild(d); return d; };
+    add('ic-icon', c.icon); add('ic-title', c.title);
+    const stage = c.anim ? buildAnim(c) : null;
+    if(stage) el.appendChild(stage.el);
+    const big = add('ic-big', c.big);
+    if(big && String(c.big).length > 14) big.classList.add('long');
+    if(Array.isArray(c.items)){
+      const ol = document.createElement('ol');
+      for(const it of c.items){ const li = document.createElement('li'); li.textContent = it; ol.appendChild(li); }
+      el.appendChild(ol);
+    }
+    const sub = add('ic-sub', c.sub);
+    box.appendChild(el);
+    if(stage){   // 굴러가는 동안엔 결과를 숨겼다가 멈추면 '짠'
+      for(const x of [big, sub]) if(x) x.classList.add('wait');
+      requestAnimationFrame(() => requestAnimationFrame(stage.start));
+      setTimeout(() => { for(const x of [big, sub]) if(x) x.classList.remove('wait'); if(big) big.classList.add('pop'); }, stage.ms);
+    }
+  }
+  // 퀴즈 문제는 맞힐 때까지 오래, 나머지는 15초 뒤 사라짐
+  const keep = cards.some(c => c.title === '퀴즈' || c.title === '힌트' || c.title === '땡!') ? 60000 : 15000;
+  cardTimer = setTimeout(() => {
+    for(const el of box.children) el.classList.add('fade');
+    cardTimer = setTimeout(() => { box.textContent = ''; }, 700);
+  }, keep);
+}
+
+// --- 주사위·동전·룰렛 애니메이션 (서버가 미리 정한 결과에 맞춰 멈춤) ---
+const PIPS = {1:[4], 2:[2,6], 3:[2,4,6], 4:[0,2,6,8], 5:[0,2,4,6,8], 6:[0,2,3,5,6,8]};
+const DICE_TURN = {1:[0,0], 2:[-90,0], 3:[0,-90], 4:[0,90], 5:[90,0], 6:[0,180]};   // 그 눈이 앞을 보게 하는 회전
+const ANIM_MS = { dice:1600, coin:1800, roulette:4400, number:2000, joke:3600 };
+function buildAnim(c){
+  const st = document.createElement('div'); st.className = 'anim-stage';
+  const ms = ANIM_MS[c.anim] || 1500;
+  if(c.anim === 'dice'){
+    const cubes = [];
+    for(const v of (c.values || [1]).slice(0, 3)){
+      const wrap = document.createElement('div'); wrap.className = 'dice-wrap';
+      const cube = document.createElement('div'); cube.className = 'dice';
+      for(let f = 1; f <= 6; f++){
+        const face = document.createElement('div'); face.className = 'face f' + f;
+        for(let k = 0; k < 9; k++){ const sp = document.createElement('span'); if(PIPS[f].includes(k)) sp.className = 'pip'; face.appendChild(sp); }
+        cube.appendChild(face);
+      }
+      const r0 = [Math.random() * 360, Math.random() * 360];
+      cube.style.transition = 'none';
+      cube.style.transform = `rotateX(${r0[0]}deg) rotateY(${r0[1]}deg)`;
+      wrap.appendChild(cube); st.appendChild(wrap); cubes.push([cube, v]);
+    }
+    return { el: st, ms, start: () => cubes.forEach(([cube, v], i) => {
+      const [x, y] = DICE_TURN[v] || [0, 0];
+      cube.style.transition = '';
+      cube.style.transitionDuration = (1.3 + i * 0.15) + 's';
+      cube.style.transform = `rotateX(${x + 720 + 360 * i}deg) rotateY(${y + 1080}deg)`;
+    }) };
+  }
+  if(c.anim === 'coin'){
+    const wrap = document.createElement('div'); wrap.className = 'coin-wrap';
+    const coin = document.createElement('div'); coin.className = 'coin';
+    coin.innerHTML = '<div class="side front">앞</div><div class="side back">뒤</div>';
+    wrap.appendChild(coin); st.appendChild(wrap);
+    return { el: st, ms, start: () => { coin.style.transform = `rotateY(${1800 + (c.side === '뒷면' ? 180 : 0)}deg)`; } };
+  }
+  if(c.anim === 'roulette'){
+    const opts = (c.options || []).slice(0, 12), n = opts.length || 1;
+    const bx = document.createElement('div'); bx.className = 'wheel-box';
+    const cv = document.createElement('canvas'); const S = 600; cv.width = S; cv.height = S;
+    const g = cv.getContext('2d'), R = S / 2 - 8, seg = Math.PI * 2 / n;
+    const COLORS = ['#ff6b81', '#ffb547', '#ffe066', '#5fe0b0', '#4fc3f7', '#a78bff'];
+    for(let i = 0; i < n; i++){
+      const a0 = -Math.PI / 2 + i * seg;
+      g.beginPath(); g.moveTo(S / 2, S / 2); g.arc(S / 2, S / 2, R, a0, a0 + seg); g.closePath();
+      g.fillStyle = COLORS[(i === n - 1 && i % 6 === 0 && n > 1) ? 2 : i % 6]; g.fill();   // 첫 칸과 마지막 칸 색이 겹치지 않게
+      g.strokeStyle = '#06121e'; g.lineWidth = 3; g.stroke();
+      g.save(); g.translate(S / 2, S / 2); g.rotate(a0 + seg / 2);
+      const t = String(opts[i]); const fs = t.length > 6 ? 26 : t.length > 3 ? 32 : 38;
+      g.font = `bold ${fs}px 'Malgun Gothic', sans-serif`; g.fillStyle = '#0b2236'; g.textAlign = 'right'; g.textBaseline = 'middle';
+      g.fillText(t, R - 22, 0, R - 70); g.restore();
+    }
+    g.beginPath(); g.arc(S / 2, S / 2, R, 0, Math.PI * 2); g.strokeStyle = '#29e3ff'; g.lineWidth = 8; g.stroke();
+    bx.appendChild(cv);
+    const ptr = document.createElement('div'); ptr.className = 'pointer'; bx.appendChild(ptr);
+    const hub = document.createElement('div'); hub.className = 'hub'; bx.appendChild(hub);
+    st.appendChild(bx);
+    const segDeg = 360 / n, jitter = (Math.random() - 0.5) * segDeg * 0.6;
+    return { el: st, ms, start: () => { cv.style.transform = `rotate(${360 * 6 - ((c.pick || 0) + 0.5) * segDeg + jitter}deg)`; } };
+  }
+  if(c.anim === 'joke'){   // 질문을 먼저 보여 주고, 잠깐 뒤 정답이 '짠'
+    const q = document.createElement('div'); q.className = 'ic-big long'; q.textContent = c.question || ''; st.appendChild(q);
+    return { el: st, ms, start: () => {} };
+  }
+  if(c.anim === 'number'){
+    const d = document.createElement('div'); d.className = 'num-roll'; d.textContent = '?'; st.appendChild(d);
+    const lo = +c.lo || 1, hi = +c.hi || 100;
+    return { el: st, ms, start: () => {
+      const t0 = performance.now();
+      const tick = () => {
+        const p = (performance.now() - t0) / ms;
+        if(p >= 0.92){ d.textContent = c.big; return; }
+        d.textContent = lo + Math.floor(Math.random() * (hi - lo + 1));
+        setTimeout(tick, 40 + p * p * 260);   // 점점 느려짐
+      };
+      tick();
+    } };
+  }
+  return null;
+}
+let animSpeakTimer = null;
+
+async function sendCommand(text){
+  clearTimeout(animSpeakTimer);
+  showCards([]);   // 이전 카드가 '들은 말'을 가리지 않게 먼저 치움
+  transcriptText.textContent = '"' + text + '"';
+  log(text, 'user');
+  // 서버가 응답 없이 멈추는 경우에 대비해 fetch 자체에도 타임아웃을 겁니다
+  // (안 그러면 아래 await가 무한정 멈춰있을 수 있음).
+  const controller = new AbortController();
+  // AI 대답이 늦을 때(서버가 Claude 10초 → Groq로 넘김)까지 기다리도록 25초로 둡니다.
+  const abortTimer = setTimeout(() => controller.abort(), 25000);
+  try{
+    const r = await fetch('/execute', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'X-Jarvis-Token': window.JARVIS_TOKEN || ''},
+      body: JSON.stringify({command:text, stream:true}),
+      signal: controller.signal,
+    });
+    if(r.status === 403){ reloadForNewServer(); return; }
+    // 한 줄씩 옴: {"say": 첫 문장} … 마지막에 {"final": true, reply, action, …}
+    let said = 0, d = null, pending = '';
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    const handleLine = (line) => {
+      if(!line.trim()) return;
+      let o; try{ o = JSON.parse(line); }catch(e){ return; }
+      if(o.final){ d = o; return; }
+      if(o.say){
+        if(!said){ replyText.textContent = o.say; }
+        said++;
+        SPEECH.add(o.say, o.lang);
+      }
+    };
+    while(true){
+      const { done, value } = await reader.read();
+      if(value) pending += dec.decode(value, { stream: true });
+      let nl;
+      while((nl = pending.indexOf('\n')) >= 0){ handleLine(pending.slice(0, nl)); pending = pending.slice(nl + 1); }
+      if(done){ handleLine(pending); break; }
+    }
+    if(!d) throw new Error('no final');
+    if(d.matched === 'chatter'){   // 주변 사람끼리 하는 말 → 끼어들지 않음
+      log('(주변 사람끼리 하는 말 같아서 대답하지 않았어요)', 'sys');
+      transcriptText.textContent = '';
+      return;
+    }
+    replyText.textContent = d.reply;
+    const ac0 = !said && Array.isArray(d.cards) && d.cards.length === 1 && d.cards[0].say_before ? d.cards[0] : null;
+    log(ac0 ? ac0.say_before : d.reply, 'sys');   // 개그·룰렛: 정답/결과는 공개된 뒤에 기록 (미리 보이지 않게)
+    showCards(d.cards);
+    if(d.action === 'present' && !GUEST_MODE) setPresentMode(d.matched === 'on', false);   // 체험 모드에선 손님이 못 바꿈
+    const ac = Array.isArray(d.cards) && d.cards.length === 1 && d.cards[0].anim ? d.cards[0] : null;
+    if(said){
+      // 이미 문장별로 말하는 중 (같은 말을 다시 하지 않음)
+    }else if(ac && ac.say_before){
+      // 굴리는 동안 결과를 미리 말하지 않고, 멈춘 뒤에 말함
+      const al = ac.lang || 'ko-KR';   // 일본어 모드 등이면 그 나라 목소리로
+      replyText.textContent = ac.say_before;
+      SPEECH.add(ac.say_before, al);
+      animSpeakTimer = setTimeout(() => {
+        replyText.textContent = d.reply; SPEECH.add(ac.say_after, al); log(ac.say_after, 'sys');
+        if(d.laugh && d.laugh.text) SPEECH.add(d.laugh.text, d.laugh.lang || 'ko-KR');   // 개그 정답 뒤에 웃음
+      },
+                                  (ANIM_MS[ac.anim] || 1500) + 150);
+    }else if(Array.isArray(d.speak_parts) && d.speak_parts.length){
+      // 번역처럼 한 대답 안에 여러 언어가 섞이면, 부분마다 그 언어 목소리로 이어서 말함
+      for(const p of d.speak_parts) SPEECH.add(p.text, p.lang);
+    }else{
+      SPEECH.add(d.reply, 'ko-KR');
+    }
+    if(d.laugh && d.laugh.text && !(ac && ac.say_before && !said)) SPEECH.add(d.laugh.text, d.laugh.lang || 'ko-KR');   // 개그 끝에 웃음소리
+  }catch(e){
+    if(e && e.name === 'AbortError'){
+      // 서버는 살아 있는데 대답이 너무 늦은 경우 (서버가 죽은 게 아님)
+      log('대답이 너무 오래 걸려서 기다리지 않았어요. 한 번 더 말씀해 주세요.', 'err');
+      replyText.textContent = '(대답이 늦어서 끊었어요. 한 번 더 말씀해 주세요)';
+    }else{
+      log('서버에 연결할 수 없습니다. 자비스 서버 창이 켜져 있는지 확인하세요. (다시 켜지면 자동으로 이어져요)', 'err');
+    }
+  }finally{
+    clearTimeout(abortTimer);
+  }
+}
+
+// 웨이크 문구 바로 뒤에 이어 붙는 부분만 도려내기 위한 패턴입니다 (문장 맨 앞에서만
+// 매칭 - "켜"/"온" 같은 흔한 명령 동사가 문장 중간에 있다고 잘못 지워지지 않도록).
+// 단, '자비스가 뭐야?'처럼 뒤에 조사가 붙으면 부르는 말이 아니라 질문의 일부라서 떼지 않음
+const WAKE_PREFIX_RE = /^\s*(hey\s*jarvis|jarvis|[가-힣]?비[스쓰시])(?!\s*(가|는|를|의|도|랑|한테|에게|란|이란|라는)(?![가-힣]))\s*(온|야|님|아)?\s*[,.!~]*\s*/i;
+
+// 지금 열려 있는 한 번짜리 명령 창 안에서 들어온 발화 하나를 실제로 처리합니다.
+// 무엇으로 처리됐든(성공/실패/타이머/슬립) 처리 후에는 다시 SLEEP로 돌아갑니다.
+function runCommand(t){
+  if(!t) { setAwake(false); return; }
+  armCommandWatchdog(); // 여기서부터 10초 안에는 반드시 다시 대기 상태로 돌아감
+  if(isShutdownCmd(t)){ shutdownAssistant(); return; }
+  if(SLEEP_RE.test(t)){
+    log('슬립 명령 감지.', 'sys');
+    setAwake(false);
+    return;
+  }
+  if(tryHandleTimer(t)){ endCommandTurn(); return; }
+  // .then이 아니라 .finally를 써서, sendCommand 내부에서 예상 못 한 오류로 실패해도
+  // (성공/실패 무관하게) 반드시 endCommandTurn이 불려 대기 상태로 돌아가게 합니다.
+  sendCommand(t).finally(endCommandTurn);
+}
+
+function handleTranscript(text){
+  let t = text.trim();
+  if(!t) return;
+
+  // 항상 듣기 모드(옵션): 웨이크워드 없이 들리는 말을 바로 명령으로 처리합니다.
+  if(ALWAYS_ON){
+    if(!awake) setAwake(true);
+    handleCommandChunk(t);
+    return;
+  }
+
+  if(!awake){
+    // 평소엔 "자비스"라고 부르지 않은 말은 전부 무시합니다 (주변 대화 오작동 방지).
+    if(!WAKE_RE.test(t)) return;
+    const rest = t.replace(WAKE_PREFIX_RE, '').trim();
+    wakeUp();
+    if(rest) handleCommandChunk(rest); // "자비스 크롬 열어줘"처럼 한 호흡에 이어 말한 경우
+    return;
+  }
+
+  // "자비스"로 깨운 뒤 열린 창(LISTEN_WINDOW_MS) 안에서 들어오는 말을 명령으로 처리
+  handleCommandChunk(t);
+}
+
+// ===========================================================================
+// 음성 입력: 마이크 녹음 + Groq Whisper 받아쓰기
+// 브라우저 자체 음성인식(Web Speech API)은 한국어가 부정확/불안정해서, 마이크로 녹음한
+// 오디오를 서버(/transcribe)로 보내 Groq Whisper로 정확히 받아씁니다.
+// ===========================================================================
+let recognition = null; // (호환용, 사용 안 함)
+let shouldRun = false;
+let mediaStream = null, audioCtx = null, sourceNode = null, procNode = null, silentSink = null;
+let lowCut1 = null, lowCut2 = null;
+let sampleRate = 48000;
+let preRoll = [];     // 최근 오디오(PREROLL_SEC초) - 말 시작 직전 부분을 놓치지 않기 위한 버퍼
+let captured = [];    // 현재 발화로 모으는 오디오
+let capturing = false;
+let speechMs = 0, silenceMs = 0, capturedMs = 0;
+
+// 조정값: 마이크가 작아 잘 안 잡히면 THRESHOLD를 낮추고(예: 0.006), 주변 소음에 자꾸
+// 켜지면 올리세요(예: 0.02).
+const VAD_THRESHOLD = 0.010;   // 이 볼륨(RMS 0~1)을 넘으면 말하는 것으로 봄 (마이크가 작으면 더 낮추기: 0.007)
+const PREROLL_SEC = 1.0;       // 말 시작 이 시간 전부터 포함해 녹음 (첫 음절 잘림 방지. 시끄러우면 말 시작을 늦게 알아채서 0.5초로는 "자비스, 크롬"이 잘렸음)
+const SILENCE_HOLD_MS = 750;   // 이만큼 조용하면 발화 끝으로 판단 (작을수록 빠름, 너무 작으면 말 중간에 쉴 때 끊김)
+const KEEP_RATIO = 0.65;       // 말하는 중엔 시작 기준의 이 비율만 넘어도 계속 말하는 걸로 봄 (작게 끝나는 '~줘' 잘림 방지)
+const MIN_SPEECH_MS = 300;     // 이보다 짧게 말한 소리는 잡음으로 무시
+// 교실처럼 시끄러운 곳: 말하지 않을 때의 평소 소음 크기를 계속 재서, 그보다 확실히 큰 소리만 말로 봄
+const NOISE_RATIO = 2.6;        // 평소 소음보다 이 배수 이상 커야 말로 봄 (시끄러운 곳에서 오작동하면 올리기)
+const NOISE_MAX_THRESHOLD = 0.08;
+let noiseFloor = 0.004, noisyNotified = false;
+// 평소 소음 = 최근 약 3.4초 소리 크기 중 아래쪽 15% (말하는 중에도 음절 사이 조용한 틈으로 계속 따라감).
+// 예전엔 듣는 중엔 소음 기준을 안 고쳐서, 밖처럼 시끄러우면 12초씩 계속 듣기만 하는 문제가 있었어요.
+const NOISE_HIST_N = 40;
+let rmsHist = [];
+// 체험 모드(부스): 옆 사람들 말소리의 '보통 크기'(듣지 않을 때 약 6초의 가운데 값)를 따로 재서,
+// 그보다 확실히 큰 소리(마이크 가까이에서 말하는 사람)일 때만 듣기 시작합니다.
+const BOOTH_HIST_N = 70;
+// 보스 요청: 보스 모드도 체험 모드와 똑같은 방식으로 듣기 (목소리 확인 없이, 부스용 소리 크기 기준)
+const LISTEN_LIKE_GUEST = true;
+const BOOTH_RATIO = 2.2;          // 주변 소음보다 이만큼 큰 소리만 말로 봄 (3.2는 사람들이 떠드는 부스에서 손님 말을 절반 넘게 놓쳤음 → 시뮬로 2.2 선택)
+let bgHist = [], bgLevel = 0;
+function updateNoiseFloor(rms, listening){
+  rmsHist.push(rms);
+  if(rmsHist.length > NOISE_HIST_N) rmsHist.shift();
+  if(rmsHist.length >= 8){
+    const sorted = rmsHist.slice().sort((a, b) => a - b);
+    noiseFloor = sorted[Math.floor(sorted.length * 0.15)];
+  }
+  if(!listening){
+    bgHist.push(rms);
+    if(bgHist.length > BOOTH_HIST_N) bgHist.shift();
+    if(bgHist.length >= 8){
+      const sorted = bgHist.slice().sort((a, b) => a - b);
+      bgLevel = sorted[Math.floor(sorted.length * 0.5)];
+    }
+  }
+}
+function startThreshold(){
+  const thr = speechThreshold();
+  if(LISTEN_LIKE_GUEST || (typeof GUEST_MODE !== 'undefined' && GUEST_MODE)) return Math.min(NOISE_MAX_THRESHOLD, Math.max(thr, bgLevel * BOOTH_RATIO));
+  return thr;
+}
+function speechThreshold(){
+  const ratio = (LISTEN_LIKE_GUEST || (typeof GUEST_MODE !== 'undefined' && GUEST_MODE)) ? NOISE_RATIO * 1.15 : NOISE_RATIO;   // 체험 모드: 잡음에 덜 반응
+  return Math.min(NOISE_MAX_THRESHOLD, Math.max(VAD_THRESHOLD, noiseFloor * ratio));
+}
+const MAX_UTTER_MS = 12000;    // 한 발화 최대 길이(안전장치)
+const MAX_UTTER_GUEST_MS = 8000;   // 체험 모드(부스): 옆 사람 말이 이어져도 8초면 끊고 받아씀 (방문객 명령은 짧음)
+const PEAK_KEEP_RATIO = 0.1;       // 체험 모드: 이번 말의 가장 큰 소리보다 약 10배(20dB) 작은 소리는 '말 끝'으로 봄
+let capturePeak = 0;
+
+let listenStarting = false;
+// 브라우저가 클릭 전엔 오디오 시작을 보류할 수 있어, 무한 대기하지 않도록 시간 제한을 둡니다.
+function resumeAudio(ms){
+  if(!audioCtx) return Promise.resolve();
+  return Promise.race([audioCtx.resume().catch(()=>{}), new Promise(r => setTimeout(r, ms || 800))]);
+}
+async function startListening(){
+  if(shouldRun || listenStarting) return;
+  listenStarting = true;
+  try{ await _startListening(); } finally { listenStarting = false; }
+}
+async function _startListening(){
+  try{
+    const base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    const micId = loadPref('jarvisMic');
+    try{
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: micId ? { ...base, deviceId: { exact: micId } } : base });
+    }catch(e1){
+      if(!micId) throw e1;
+      log('고른 마이크를 찾을 수 없어서 기본 마이크로 들을게요. (헤드폰이 연결됐는지 확인해 주세요)', 'err');
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: base });
+    }
+    const tr = mediaStream.getAudioTracks()[0];
+    if(tr) log('🎤 마이크: ' + (tr.label || '기본 마이크'), 'sys');
+  }catch(e){
+    log('마이크 권한이 필요합니다. 브라우저에서 허용해주세요.', 'err');
+    micState.textContent = 'BLOCKED';
+    return;
+  }
+  try{
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await resumeAudio(800);
+    sampleRate = audioCtx.sampleRate;
+    sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+    procNode = audioCtx.createScriptProcessor(4096, 1, 1);
+    procNode.onaudioprocess = onAudioProcess;
+    // 잡음 줄이기: 사람 목소리보다 낮은 웅웅 소리(에어컨·발소리·마이크 만지는 소리, 100Hz 아래)를 잘라냄.
+    // 브라우저 기본 잡음 제거(noiseSuppression)와 함께 씀. 말소리 판단(VAD)과 받아쓰기 둘 다 깨끗해짐.
+    lowCut1 = audioCtx.createBiquadFilter(); lowCut1.type = 'highpass'; lowCut1.frequency.value = 100; lowCut1.Q.value = 0.707;
+    lowCut2 = audioCtx.createBiquadFilter(); lowCut2.type = 'highpass'; lowCut2.frequency.value = 100; lowCut2.Q.value = 0.707;
+    sourceNode.connect(lowCut1); lowCut1.connect(lowCut2); lowCut2.connect(procNode);
+    // onaudioprocess가 확실히 호출되도록 목적지에 연결하되, 소리가 나지 않게 볼륨 0으로.
+    silentSink = audioCtx.createGain(); silentSink.gain.value = 0;
+    procNode.connect(silentSink); silentSink.connect(audioCtx.destination);
+  }catch(e){ log('오디오 초기화 실패: ' + e, 'err'); return; }
+  shouldRun = true;
+  micState.textContent = 'ON';
+  log('마이크 준비 완료. 그냥 말하면 실행됩니다. (예: 크롬 열어)', 'sys');
+  logSelectedVoicesOnce();
+}
+
+// 마이크 오디오가 들어올 때마다 호출됩니다. 볼륨으로 말의 시작/끝을 판단하고,
+// 말 직전(프리롤)부터 끝까지 모아 WAV로 서버(Whisper)에 보냅니다.
+function onAudioProcess(e){
+  if(!shouldRun) return;
+  const input = e.inputBuffer.getChannelData(0);
+  const chunk = new Float32Array(input); // 복사본
+  const chunkMs = (chunk.length / sampleRate) * 1000;
+  let sum = 0; for(let i = 0; i < chunk.length; i++){ sum += chunk[i] * chunk[i]; }
+  const rms = Math.sqrt(sum / chunk.length);
+
+  // 자비스가 말하는 중: 크게 말하는 소리만 따로 모아 '보스가 끊는 말'인지 확인합니다.
+  if(ttsSpeaking){
+    if(capturing){ capturing = false; captured = []; micDot.classList.remove('live'); }
+    preRoll = [];
+    bargeProcess(chunk, rms, chunkMs);
+    return;
+  }
+  // 자비스가 말한 직후엔 녹음을 시작하지 않되(에코 방지), 소리는 계속 모아 둠:
+  // 보스가 그 사이에 말을 시작해도 앞부분("자비스,")이 잘리지 않게 (자비스 목소리는 목소리 인증이 걸러 줌)
+  if(Date.now() < echoGuardUntil){
+    if(capturing){ capturing = false; captured = []; micDot.classList.remove('live'); }
+    preRoll.push(chunk);
+    let n = 0; for(const c of preRoll) n += c.length;
+    while(n > PREROLL_SEC * sampleRate && preRoll.length > 1){ n -= preRoll[0].length; preRoll.shift(); }
+    return;
+  }
+
+  // 프리롤 버퍼: 최근 PREROLL_SEC초만 유지
+  preRoll.push(chunk);
+  let preSamples = 0; for(const c of preRoll) preSamples += c.length;
+  while(preSamples > PREROLL_SEC * sampleRate && preRoll.length > 1){
+    preSamples -= preRoll[0].length; preRoll.shift();
+  }
+
+  updateNoiseFloor(rms, capturing);
+  const thr = speechThreshold();
+  if(!capturing){
+    if(rmsHist.length < 8) return;   // 마이크를 막 켠 직후엔 평소 소음을 먼저 잼
+    if(!noisyNotified && thr > VAD_THRESHOLD * 1.8){
+      noisyNotified = true;
+      log('주변이 시끄러워서 듣는 기준을 자동으로 높였어요. 마이크 가까이에서 또렷하게 말해 주세요.', 'sys');
+    }
+    if(rms > startThreshold()){
+      capturing = true;
+      captured = preRoll.slice();            // 말 시작 직전 부분 포함
+      capturedMs = (preSamples / sampleRate) * 1000;
+      speechMs = chunkMs; silenceMs = 0; capturePeak = rms;
+      micDot.classList.add('live');
+      transcriptText.textContent = '(듣는 중...)';
+    }
+  }else{
+    captured.push(chunk);
+    capturedMs += chunkMs;
+    const booth = LISTEN_LIKE_GUEST || GUEST_MODE;
+    if(rms > capturePeak) capturePeak = rms;
+    const keep = booth ? Math.max(thr * KEEP_RATIO, capturePeak * PEAK_KEEP_RATIO) : thr * KEEP_RATIO;
+    if(rms > keep){ silenceMs = 0; speechMs += chunkMs; }
+    else{ silenceMs += chunkMs; }
+    if(silenceMs > SILENCE_HOLD_MS || capturedMs > (booth ? MAX_UTTER_GUEST_MS : MAX_UTTER_MS)){ endCapture(); }
+  }
+}
+
+// --- 말하는 중 끊기(음성): 자비스 목소리보다 확실히 큰 소리만, 짧게 모아서 확인 ---
+const BARGE_THRESHOLD = 0.035;  // 자비스가 말하는 중엔 이보다 큰 소리만 봄 (스피커 소리 오인 방지)
+let bCapturing = false, bCaptured = [], bSpeechMs = 0, bSilenceMs = 0, bTotalMs = 0, bargeBusy = false;
+function bargeProcess(chunk, rms, chunkMs){
+  if(bargeBusy) return;
+  if(!bCapturing){
+    if(rms > BARGE_THRESHOLD){ bCapturing = true; bCaptured = [chunk]; bSpeechMs = chunkMs; bSilenceMs = 0; bTotalMs = chunkMs; }
+    return;
+  }
+  bCaptured.push(chunk); bTotalMs += chunkMs;
+  if(rms > BARGE_THRESHOLD * 0.6){ bSilenceMs = 0; bSpeechMs += chunkMs; } else { bSilenceMs += chunkMs; }
+  if(bSilenceMs > 450 || bTotalMs > 3500){
+    const chunks = bCaptured, spoke = bSpeechMs;
+    bCapturing = false; bCaptured = [];
+    if(spoke >= 300) checkBarge(encodeWav(chunks, sampleRate));
+  }
+}
+async function checkBarge(blob){
+  bargeBusy = true;
+  try{
+    const r = await fetch('/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'audio/wav', 'X-Jarvis-Token': window.JARVIS_TOKEN || '' },
+      body: blob,
+    });
+    const d = await r.json();
+    // 목소리 등록이 되어 있고 '보스 목소리'로 판정된 경우에만 끊습니다 (자비스 자기 목소리는 여기서 걸러짐)
+    if(d.score == null || d.speaker === 'other') return;
+    const text = (d.text || '').trim();
+    if(!text || isWhisperNoise(text)) return;
+    const t = normalizeSpeech(text), spoken = normalizeSpeech(lastSpokenText);
+    if(t && spoken && spoken.includes(t)) return;   // 자기 말이 섞여 들린 것
+    if(!ttsSpeaking) return;
+    stopSpeaking('보스 목소리 ' + d.score);
+    if(STOP_SPEAK_RE.test(text)) return;             // "그만" → 멈추기만
+    processWhisperText(text);                        // 다른 말 → 끊고 바로 그 명령 실행
+  }catch(e){
+  }finally{
+    bargeBusy = false;
+  }
+}
+
+function endCapture(){
+  capturing = false;
+  micDot.classList.remove('live');
+  const chunks = captured; captured = [];
+  const spoke = speechMs; speechMs = 0; silenceMs = 0;
+  if(spoke < ((GUEST_MODE || LISTEN_LIKE_GUEST) ? 400 : MIN_SPEECH_MS)){ transcriptText.textContent = ''; return; } // 너무 짧음 (체험 모드는 더 엄격)
+  sendAudio(encodeWav(chunks, sampleRate), spoke);
+}
+
+// Float32 오디오 청크들을 16bit PCM WAV(Blob)로 인코딩합니다.
+function encodeWav(chunks, rate){
+  let len = 0; for(const c of chunks) len += c.length;
+  let pcm = new Float32Array(len);
+  let off = 0; for(const c of chunks){ pcm.set(c, off); off += c.length; }
+  // 1) 16kHz로 줄이기: Whisper가 원래 쓰는 품질이라 정확도는 같고, 업로드는 약 1/3 → 더 빠름
+  const OUT_RATE = 16000;
+  if(rate > OUT_RATE){
+    const ratio = rate / OUT_RATE, outLen = Math.floor(pcm.length / ratio);
+    const out = new Float32Array(outLen);
+    for(let i = 0; i < outLen; i++){
+      const a = Math.floor(i * ratio), b = Math.min(pcm.length, Math.floor((i + 1) * ratio));
+      let sum = 0; for(let j = a; j < b; j++) sum += pcm[j];
+      out[i] = sum / Math.max(1, b - a);
+    }
+    pcm = out; rate = OUT_RATE;
+  }
+  // 2) 소리 크기 보정: 마이크가 작아도 또렷하게 들리도록 최대 8배까지 키움
+  let peak = 0; for(let i = 0; i < pcm.length; i++){ const v = Math.abs(pcm[i]); if(v > peak) peak = v; }
+  if(peak > 0.005){
+    const gain = Math.min(0.9 / peak, 8);
+    if(gain > 1) for(let i = 0; i < pcm.length; i++) pcm[i] *= gain;
+  }
+  const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const wr = (o, s) => { for(let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  wr(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); wr(8, 'WAVE');
+  wr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  wr(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+  let p = 44;
+  for(let i = 0; i < pcm.length; i++){
+    let s = Math.max(-1, Math.min(1, pcm[i]));
+    view.setInt16(p, s < 0 ? s * 0x8000 : s * 0x7FFF, true); p += 2;
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+// 길게 말했는데 못 알아들은 횟수 (시끄러운 곳 안내용)
+let missedLong = [];
+function noteMissed(spokeMs){
+  if(!(spokeMs >= 1200)) return;
+  const now = Date.now();
+  missedLong = missedLong.filter(t => now - t < 25000); missedLong.push(now);
+  if(missedLong.length >= 2){
+    missedLong = [];
+    transcriptText.textContent = '(주변이 시끄러워서 잘 못 들었어요. 마이크에 조금 더 가까이 또박또박 말해 주세요)';
+    log('주변 소리가 커서 말이 잘 안 들려요. 마이크에 가까이 말해 주세요.', 'sys');
+  }
+}
+
+async function sendAudio(blob, spokeMs){
+  if(enrolling) return sendEnroll(blob);   // 목소리 등록 중이면 등록용으로 보냄
+  transcriptText.textContent = '(받아쓰는 중...)';
+  try{
+    const r = await fetch('/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'audio/wav', 'X-Jarvis-Token': window.JARVIS_TOKEN || '' },
+      body: blob,
+    });
+    const d = await r.json();
+    if(d.speaker === 'other'){
+      transcriptText.textContent = '';
+      log(`목소리 일치 ${d.score} → 보스 목소리가 아니라서 무시했어요`, 'sys');
+      return;
+    }
+    if(d.score != null) log(`목소리 일치 ${d.score} ✓ 보스`, 'sys');
+    if(d.error){
+      // 받아쓰기 서버 문제(인터넷·한도): 아무 반응 없이 넘어가지 않게 화면에 알림
+      log('받아쓰기가 잠깐 안 돼요 (' + d.error + '). 인터넷 연결을 확인해 주세요.', 'err');
+      transcriptText.textContent = '(잘 못 들었어요. 잠시 뒤 다시 말씀해 주세요)';
+      return;
+    }
+    const text = (d.text || '').trim();
+    if(text){
+      processWhisperText(text);
+    }else{
+      transcriptText.textContent = '';   // 잡음이었거나 말이 없었음 (조용히 넘어감)
+      noteMissed(spokeMs);
+    }
+  }catch(e){
+    log('받아쓰기 실패: 서버 연결/키를 확인하세요.', 'err');
+    transcriptText.textContent = '(받아쓰기 실패)';
+  }
+}
+
+// Whisper가 조용한 잡음에서 흔히 지어내는 환청 문구들 (유튜브 자막 학습 흔적).
+// 이 문구만 딱 들리면 실제 말이 아니라고 보고 무시합니다.
+const WHISPER_NOISE = [
+  '감사합니다','고맙습니다','시청해주셔서감사합니다','시청해주셔서감사합니다다음영상에서만나요',
+  '구독과좋아요','구독과좋아요부탁드립니다','다음영상에서만나요','다음시간에만나요',
+  '오늘도시청해주셔서감사합니다','한국어','자막','mbc뉴스','자막by','자막제공',
+  'thankyou','thanksforwatching','pleasesubscribe',
+];
+function isWhisperNoise(text){
+  const t = (text||'').toLowerCase().replace(/[\s.,!?~…'"·・]/g,'');
+  if(!t) return true;
+  if(WHISPER_NOISE.includes(t)) return true;
+  // 대표 환청 키워드가 들어간 짧은 문장도 무시
+  if(t.length <= 20 && /(시청해주셔서|구독과좋아요|다음영상|다음시간에만나|자막제공)/.test(t)) return true;
+  return false;
+}
+
+// Whisper가 받아쓴 정확한 텍스트를 명령/대화로 처리합니다.
+function processWhisperText(text){
+  // 받아쓴 내용을 항상 화면/로그에 보여줍니다 (동작 확인/디버깅용).
+  transcriptText.textContent = '들림: "' + text + '"';
+  if(isEcho(text)){ transcriptText.textContent = ''; log('(자비스 자기 목소리로 보여서 무시: ' + text + ')', 'sys'); return; }
+  if(isWhisperNoise(text)){ transcriptText.textContent=''; return; }  // 조용할 때 나는 환청 무시
+  log('들림: ' + text, 'user');
+  // "자비스 꺼줘/종료" 같은 종료 명령은 웨이크워드를 떼기 전에 원문에서 먼저 확인합니다.
+  if(isShutdownCmd(text)){ shutdownAssistant(); return; }
+  if(tryPresentToggle(text)) return;
+  // 웨이크워드를 요구하지 않는 모드: 들리는 말을 바로 명령으로 실행합니다.
+  // 체험 모드(부스)에서는 발표 모드가 켜져 있어도 "자비스" 없이 바로 대답 (안내문: '자비스라고 안 불러도 돼요')
+  if(!REQUIRE_WAKE_WORD || GUEST_MODE){
+    if(!awake) setAwake(true);
+    const cmd = text.replace(WAKE_PREFIX_RE, '').trim() || text;
+    runWhisperCommand(cmd);
+    armListenWindow();
+    return;
+  }
+  if(awake){
+    // 이미 깨어 있으면(웨이크 후 창) 웨이크워드 없이 이어지는 명령으로 처리
+    const cmd = text.replace(WAKE_PREFIX_RE, '').trim();
+    if(cmd) runWhisperCommand(cmd);
+    return;
+  }
+  // 발표 중 "이 서비스는~" 같은 말에 깨지 않도록, 문장 '맨 앞'의 자비스 호출만 인정합니다.
+  if(PRESENT_WAKE_RE.test(text)){
+    const rest = text.replace(PRESENT_WAKE_RE, '').replace(/^[\s,.!~]+/, '').trim();
+    if(rest){ wakeUp(true); runWhisperCommand(rest); }  // "자비스 크롬 열어" - 인사 생략, 바로 실행
+    else { wakeUp(false); }                              // "자비스"만 - 인사하고 다음 명령 대기
+  }else{
+    // "자비스"로 시작 안 하면 실행하지 않습니다 (주변 대화 오작동 방지).
+    log('→ "자비스"로 시작해야 실행됩니다. (예: 자비스 크롬 열어)', 'sys');
+  }
+}
+
+// 발표 모드 켜기/끄기 (음성 "발표 모드 켜줘/꺼줘" 또는 버튼)
+const PRESENT_WAKE_RE = /^\s*((헤이|hey|하이)\s*)?(자비스|재비스|자비쓰|저비스|차비스|쟈비스|jarvis)\s*(야|아|님)?/i;
+const PRESENT_ON_RE = /발표\s*모드\s*(를|로)?\s*(켜|시작|on|해)/i;
+const PRESENT_OFF_RE = /발표\s*모드\s*(를)?\s*(꺼|끄|끝|종료|off|해제)/i;
+function setPresentMode(on, say){
+  REQUIRE_WAKE_WORD = !!on;
+  try{ localStorage.setItem('jarvisPresent', on ? '1' : '0'); }catch(e){}
+  const btn = document.getElementById('presentBtn');
+  if(btn){ btn.classList.toggle('active', !!on); btn.textContent = on ? '🎤 발표 모드 ON' : '🎤 발표 모드'; }
+  const sub = document.querySelector('.sub-text');
+  if(sub) sub.textContent = on ? '"자비스, ~" 라고 불러 주세요' : '그냥 말하면 바로 실행돼요';
+  if(on){ setAwake(false); }
+  if(say){
+    const msg = on ? '발표 모드를 켰어요. 이제 자비스라고 불러 주실 때만 대답할게요.'
+                   : '발표 모드를 껐어요. 이제 그냥 말씀하셔도 바로 대답할게요.';
+    replyText.textContent = msg; log(msg, 'sys'); speak(msg, 'ko-KR');
+  }
+}
+function tryPresentToggle(text){
+  if(GUEST_MODE) return false;   // 체험 모드에선 방문객이 발표 모드를 바꾸지 못함
+  if(PRESENT_OFF_RE.test(text)){ setPresentMode(false, true); return true; }
+  if(PRESENT_ON_RE.test(text)){ setPresentMode(true, true); if(REQUIRE_WAKE_WORD) armListenWindow(); return true; }
+  return false;
+}
+
+function runWhisperCommand(t){
+  t = (t || '').trim();
+  if(!t) return;
+  if(isShutdownCmd(t)){ shutdownAssistant(); return; }
+  transcriptText.textContent = '"' + t + '"';
+  runCommand(t);
+}
+
+function stopListening(){
+  shouldRun = false; capturing = false; captured = []; preRoll = []; rmsHist = []; bgHist = [];
+  micDot.classList.remove('live');
+  try{ if(procNode){ procNode.onaudioprocess = null; procNode.disconnect(); } }catch(e){}
+  try{ if(sourceNode) sourceNode.disconnect(); }catch(e){}
+  try{ if(silentSink) silentSink.disconnect(); }catch(e){}
+  try{ if(lowCut1) lowCut1.disconnect(); if(lowCut2) lowCut2.disconnect(); }catch(e){}
+  lowCut1 = null; lowCut2 = null;
+  try{ if(mediaStream) mediaStream.getTracks().forEach(t => t.stop()); }catch(e){}
+  try{ if(audioCtx) audioCtx.close(); }catch(e){}
+  mediaStream = null; audioCtx = null; sourceNode = null; procNode = null; silentSink = null;
+  micState.textContent = 'OFF';
+}
+
+// 시작 설정 (원치 않으면 false 로)
+const AUTO_LISTEN = true;    // 화면이 열리자마자 클릭 없이 바로 듣기 시작
+const IS_PHONE = !!window.JARVIS_PHONE;   // 핸드폰으로 연결한 화면 (https://PC주소:5006)
+if(IS_PHONE) document.body.classList.add('phone');
+const AUTO_MINI = !IS_PHONE; // 미니 자비스 자동 열기 (브라우저 규칙상 화면을 처음 클릭할 때 열림. 폰에선 안 씀)
+
+// 마이크를 켜고 오디오가 실제로 돌아가면 시작 화면(overlay)을 숨깁니다.
+async function bootJarvis(){
+  if(!shouldRun) await startListening();
+  if(audioCtx && audioCtx.state !== 'running') await resumeAudio(800);
+  const ok = shouldRun && audioCtx && audioCtx.state === 'running';
+  if(ok) overlay.style.display = 'none';
+  return ok;
+}
+
+document.getElementById('enableBtn').addEventListener('click', ()=>{ bootJarvis(); });
+
+// 말 끊기: ⏹ 버튼, Esc 키, 가운데 원 클릭
+document.getElementById('stopBtn').addEventListener('click', ()=> stopSpeaking('버튼'));
+// 마이크·스피커 고르기 (선택은 이 컴퓨터 브라우저에 기억)
+function loadPref(k){ try{ return localStorage.getItem(k) || ''; }catch(e){ return ''; } }
+function savePref(k, v){ try{ if(v) localStorage.setItem(k, v); else localStorage.removeItem(k); }catch(e){} }
+async function fillDevices(){
+  let list = [];
+  try{ list = await navigator.mediaDevices.enumerateDevices(); }catch(e){}
+  const fill = (sel, kind, key, defLabel) => {
+    sel.innerHTML = '';
+    const d0 = document.createElement('option'); d0.value = ''; d0.textContent = defLabel; sel.appendChild(d0);
+    list.filter(d => d.kind === kind && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications').forEach(d => {
+      const o = document.createElement('option'); o.value = d.deviceId; o.textContent = d.label || (kind === 'audioinput' ? '마이크' : '스피커'); sel.appendChild(o);
+    });
+    sel.value = loadPref(key); if(sel.value !== loadPref(key)) sel.value = '';
+  };
+  fill(document.getElementById('micSel'), 'audioinput', 'jarvisMic', '기본 마이크 (윈도우 설정)');
+  fill(document.getElementById('spkSel'), 'audiooutput', 'jarvisSpk', '기본 스피커 (윈도우 설정)');
+  if(!(window.HTMLMediaElement && HTMLMediaElement.prototype.setSinkId)){
+    document.getElementById('spkSel').disabled = true;
+  }
+}
+document.getElementById('deviceBtn').addEventListener('click', async ()=>{
+  await fillDevices(); document.getElementById('deviceModal').classList.add('show');
+});
+document.getElementById('deviceClose').addEventListener('click', ()=> document.getElementById('deviceModal').classList.remove('show'));
+document.getElementById('micSel').addEventListener('change', async (e)=>{
+  savePref('jarvisMic', e.target.value);
+  log('마이크를 바꿨어요. 다시 들을게요.', 'sys');
+  stopListening(); await startListening();
+});
+document.getElementById('spkSel').addEventListener('change', (e)=>{
+  savePref('jarvisSpk', e.target.value);
+  log('스피커를 바꿨어요.', 'sys');
+});
+document.getElementById('spkTest').addEventListener('click', ()=> speak('스피커 시험 중입니다. 제 목소리가 잘 들리시나요, 보스?', 'ko-KR'));
+
+// 체험 모드: 켜기는 버튼, 끄기는 버튼 + 비밀번호 (비밀번호는 서버에서만 확인)
+async function guestRequest(body){
+  try{
+    const r = await fetch('/guest', { method:'POST',
+      headers:{ 'Content-Type':'application/json', 'X-Jarvis-Token': window.JARVIS_TOKEN || '' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    setGuestUi(!!d.guest);
+    if(d.ok && d.reply){ replyText.textContent = d.reply; log(d.reply, 'sys'); speak(d.reply, 'ko-KR'); }
+    return d;
+  }catch(e){ log('서버에 연결할 수 없어요.', 'err'); return {}; }
+}
+const guestModal = document.getElementById('guestModal');
+const guestPw = document.getElementById('guestPw');
+function closeGuestModal(){ guestModal.classList.remove('show'); guestPw.value = ''; }
+document.getElementById('guestBtn').addEventListener('click', ()=>{
+  if(!GUEST_MODE){ guestRequest({ action:'on' }); return; }
+  guestModal.classList.add('show'); document.getElementById('guestMsg').textContent = ''; setTimeout(()=> guestPw.focus(), 50);
+});
+document.getElementById('guestCancel').addEventListener('click', closeGuestModal);
+document.getElementById('guestForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const pw = guestPw.value; guestPw.value = '';
+  const d = await guestRequest({ action:'off', password: pw });
+  if(d.ok) closeGuestModal();
+  else document.getElementById('guestMsg').textContent = d.reply || '다시 시도해 주세요.';
+});
+document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') stopSpeaking('Esc'); });
+document.getElementById('ring').addEventListener('click', ()=> stopSpeaking('클릭'));
+
+// 발표 모드 버튼 / 글자 입력창 (말이 안 통할 때 발표용 비상 수단 - 웨이크워드 없이 바로 실행)
+document.getElementById('presentBtn').addEventListener('click', ()=> setPresentMode(!REQUIRE_WAKE_WORD, true));
+setPresentMode(REQUIRE_WAKE_WORD, false);
+document.getElementById('typeForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const inp = document.getElementById('typeInput');
+  const t = (inp.value || '').trim();
+  inp.value = '';
+  if(!t) return;
+  if(tryPresentToggle(t)) return;
+  if(STOP_SPEAK_RE.test(t)){ stopSpeaking('입력'); return; }
+  stopSpeaking('새 명령');
+  if(!awake) setAwake(true);
+  runWhisperCommand(t.replace(WAKE_PREFIX_RE, '').trim() || t);
+});
+
+// 미니 창은 사용자의 첫 클릭 순간에 엽니다 (브라우저가 클릭 없이는 못 열게 막아서).
+if(AUTO_MINI){
+  document.addEventListener('click', function openMiniOnce(e){
+    document.removeEventListener('click', openMiniOnce, true);
+    if(e.target && e.target.id === 'miniBtn') return;  // 미니 버튼은 자기 핸들러가 처리
+    if(!pipWin){ try{ toggleMiniJarvis(); }catch(err){} }
+  }, true);
+}
+
+// 내 위치 알려주기 (Windows 위치 서비스, 와이파이 기반) → 날씨를 지금 있는 동네 기준으로.
+// 처음 한 번 브라우저가 위치 허용을 물어봅니다. 30분마다 갱신.
+let _locWarned = false;
+function updateLocation(){
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    fetch('/location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Jarvis-Token': window.JARVIS_TOKEN || '' },
+      body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+    }).then(r => r.json()).then(d => {
+      if(d && (d.query || d.name)) log('📍 노트북 위치: ' + (d.query || d.name), 'sys');
+    }).catch(()=>{});
+  }, () => {
+    if(!_locWarned){
+      _locWarned = true;
+      log('정확한 위치를 못 가져와서, 날씨는 인터넷 주소 기준의 대략적인 위치로 알려드려요.', 'sys');
+    }
+  }, { enableHighAccuracy: false, timeout: 15000, maximumAge: _locFresh ? 0 : 30 * 60 * 1000 });
+  _locFresh = false;
+}
+let _locFresh = true;   // 화면을 열 때는 항상 지금 위치를 새로 받음 (예전 위치 재사용 안 함)
+updateLocation();
+setInterval(updateLocation, 30 * 60 * 1000);
+
+// 자비스 창이 두 개 열려 있으면 둘 다 듣고 서로 말을 끊음 → 가장 최근에 연 창만 듣고, 예전 창은 쉼
+var DORMANT = false;   // var: 위쪽 함수(reloadForNewServer)가 먼저 불려도 오류 없게
+try{
+  const TAB_ID = Math.random().toString(36).slice(2);
+  const bc = new BroadcastChannel('jarvis-tab');
+  bc.onmessage = (ev) => {
+    if(!ev.data || ev.data.id === TAB_ID || ev.data.type !== 'hello' || DORMANT) return;
+    DORMANT = true;
+    try{ stopSpeaking('다른 창'); }catch(e){}
+    try{ stopListening(); }catch(e){}
+    try{ clearInterval(statsInterval); }catch(e){}
+    overlay.style.display = '';
+    const p = overlay.querySelector('p');
+    if(p) p.textContent = '다른 창에서 자비스가 켜져 있어요. 이 창은 쉬는 중이에요 (닫아도 돼요).';
+    const b = document.getElementById('enableBtn'); if(b) b.style.display = 'none';
+    document.title = 'J.A.R.V.I.S. (쉬는 중)';
+  };
+  bc.postMessage({ type: 'hello', id: TAB_ID });
+}catch(e){}
+
+// 화면이 열리자마자 바로 듣기 시작 (전에 마이크를 허용했다면 클릭 없이 바로 됨)
+if(AUTO_LISTEN){
+  bootJarvis().then(ok => {
+    if(!ok){
+      const p = overlay.querySelector('p');
+      if(p) p.textContent = '처음 한 번만 아래 버튼을 눌러 마이크를 허용해 주세요. 다음부터는 열리자마자 바로 들어요.';
+    }
+  });
+}
+
+
+// ===========================================================================
+// 보스 목소리 등록 - 등록하면 보스 목소리에만 반응 (다른 사람·TV 소리는 무시)
+// ===========================================================================
+const ENROLL_SENTENCES = [
+  '자비스, 오늘 날씨 어때? 크롬 좀 열어줘.',
+  '나는 자비스의 보스야. 내 목소리를 기억해 줘.',
+  '유튜브에서 음악 틀어주고 볼륨 조금 올려줘.',
+  '지금 몇 시야? 오늘 뉴스도 알려줘.',
+  '서울역 가는 길 좀 알려줘. 근처 맛집도 찾아 줘.',
+  '이제부터 영어로만 말해. 아니다, 다시 한국어로 말해 줘.',
+];
+let enrolling = false, enrollStep = 0, lastVoiceCount = 0, enrollAddMode = false;
+function showEnrollPrompt(){
+  const t = ENROLL_SENTENCES[enrollStep];
+  replyText.textContent = `목소리 등록 ${enrollStep + 1}/${ENROLL_SENTENCES.length} — 아래 문장을 평소처럼 읽어 주세요`;
+  transcriptText.textContent = '"' + t + '"';
+  log(`목소리 등록 ${enrollStep + 1}/${ENROLL_SENTENCES.length}: "${t}"`, 'sys');
+}
+function updateVoiceBtn(count){
+  lastVoiceCount = Math.max(0, count || 0);
+  const b = document.getElementById('voiceBtn'); if(!b || enrolling) return;
+  b.textContent = lastVoiceCount > 0 ? `🎙 목소리 ${lastVoiceCount}개 등록됨 (추가 등록)` : '🎙 목소리 등록';
+  b.classList.toggle('active', lastVoiceCount > 0);
+}
+async function startEnroll(){
+  if(enrolling){
+    enrolling = false; replyText.textContent = ''; transcriptText.textContent = '';
+    log('목소리 등록을 멈췄어요. 이미 읽은 문장은 저장돼 있어요.', 'sys');
+    return;
+  }
+  if(!shouldRun) await bootJarvis();
+  // 이미 등록된 목소리가 있으면: 지금 장소의 목소리를 "추가"할지, 처음부터 새로 할지 고름
+  enrollAddMode = false;
+  if(lastVoiceCount > 0){
+    enrollAddMode = confirm(`지금 등록된 목소리가 ${lastVoiceCount}개 있어요.\n\n`
+      + `[확인] 지금 이 장소의 목소리를 추가로 등록 (추천)\n[취소] 전부 지우고 처음부터 새로 등록`);
+  }
+  if(!enrollAddMode){
+    try{
+      const r = await fetch('/enroll/reset', { method:'POST', headers:{ 'X-Jarvis-Token': window.JARVIS_TOKEN || '' } });
+      const d = await r.json();
+      if(!d.ok){
+        log('목소리 등록을 쓰려면 PowerShell에서 pip install sherpa-onnx 를 실행한 뒤 서버를 다시 켜 주세요.', 'err');
+        return;
+      }
+      lastVoiceCount = 0;
+    }catch(e){ log('서버에 연결할 수 없어요.', 'err'); return; }
+  }
+  enrolling = true; enrollStep = 0;
+  const b = document.getElementById('voiceBtn'); if(b) b.textContent = '🎙 등록 중... (누르면 취소)';
+  speak(enrollAddMode ? '이 장소의 목소리를 추가로 등록할게요. 화면의 문장을 하나씩 읽어 주세요.'
+                      : '목소리 등록을 시작할게요. 화면에 나오는 문장을 하나씩 읽어 주세요.', 'ko-KR');
+  showEnrollPrompt();
+}
+async function sendEnroll(blob){
+  try{
+    const r = await fetch('/enroll', {
+      method:'POST',
+      headers:{ 'Content-Type':'audio/wav', 'X-Jarvis-Token': window.JARVIS_TOKEN || '' },
+      body: blob,
+    });
+    const d = await r.json();
+    if(!enrolling) return;
+    if(!d.ok){
+      log(d.error === 'mismatch'
+        ? '앞에 등록한 목소리와 많이 달라요 (다른 사람 목소리나 잡음이 섞였을 수 있어요). 같은 문장을 다시 읽어 주세요.'
+        : '잘 안 들렸어요. 같은 문장을 조금 더 또렷하게 다시 읽어 주세요.', 'sys');
+      showEnrollPrompt(); return;
+    }
+    enrollStep++;
+    if(enrollStep < ENROLL_SENTENCES.length){ showEnrollPrompt(); return; }
+    enrolling = false;
+    replyText.textContent = ''; transcriptText.textContent = '';
+    log(`목소리 등록 완료! (총 ${d.count}개) 이제 보스 목소리에만 반응해요.`, 'sys');
+    speak(enrollAddMode ? '이 장소 목소리도 기억했어요.' : '목소리 등록을 마쳤어요. 이제 보스 목소리에만 반응할게요.', 'ko-KR');
+    updateVoiceBtn(d.count);
+  }catch(e){ log('목소리 등록 중 오류가 났어요.', 'err'); }
+}
+document.getElementById('voiceBtn').addEventListener('click', startEnroll);
+
+// ===========================================================================
+// 미니 자비스 - 항상 화면 위에 떠 있는 작은 창 (Document Picture-in-Picture)
+// 다른 창을 써도 위에 떠서 자비스 상태(대기/듣는 중/말하는 중)를 계속 보여줍니다.
+// ===========================================================================
+let pipWin = null, pipTimer = null;
+async function toggleMiniJarvis(){
+  if(pipWin){ try{ pipWin.close(); }catch(e){} return; }
+  if(!window.documentPictureInPicture){
+    log('이 브라우저는 미니 창(PiP)을 지원하지 않아요. 최신 Chrome 또는 Edge를 쓰세요.', 'err');
+    return;
+  }
+  try{
+    pipWin = await documentPictureInPicture.requestWindow({ width: 220, height: 250 });
+  }catch(e){ log('미니 창을 열지 못했어요.', 'err'); return; }
+  const d = pipWin.document;
+  d.body.innerHTML =
+    '<style>'
+    + 'html,body{margin:0;height:100%;background:#04121a;overflow:hidden;'
+    + 'font-family:Segoe UI,system-ui,sans-serif;color:#cfe9f2;}'
+    + '.wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;}'
+    + '.mtitle{color:#29e3ff;font-size:13px;letter-spacing:3px;}'
+    + '.mo{width:120px;height:120px;border-radius:50%;position:relative;transition:box-shadow .3s,border-color .3s;'
+    + 'border:2px solid rgba(41,227,255,.35);background:radial-gradient(circle,rgba(41,227,255,.15),transparent 70%);}'
+    + '.mo::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid transparent;'
+    + 'border-top-color:#29e3ff;animation:sp 3s linear infinite;opacity:.6;}'
+    + '.mo.awake{border-color:#29e3ff;box-shadow:0 0 26px rgba(41,227,255,.6);}'
+    + '.mo.awake::after{animation-duration:1.1s;opacity:1;}'
+    + '.mo.speaking{box-shadow:0 0 38px rgba(41,227,255,.95);}'
+    + '@keyframes sp{to{transform:rotate(360deg);}}'
+    + '.mt{font-size:12px;text-align:center;padding:0 10px;min-height:16px;opacity:.9;}'
+    + '</style>'
+    + '<div class="wrap"><div class="mtitle">J.A.R.V.I.S</div>'
+    + '<div class="mo" id="mOrb"></div><div class="mt" id="mText">대기 중</div></div>';
+  document.getElementById('miniBtn').classList.add('active');
+  updateMini();
+  if(pipTimer) clearInterval(pipTimer);
+  pipTimer = setInterval(updateMini, 250);
+  pipWin.addEventListener('pagehide', ()=>{
+    if(pipTimer){ clearInterval(pipTimer); pipTimer = null; }
+    pipWin = null;
+    const b = document.getElementById('miniBtn'); if(b) b.classList.remove('active');
+  });
+}
+function updateMini(){
+  if(!pipWin) return;
+  try{
+    const orb = pipWin.document.getElementById('mOrb');
+    const txt = pipWin.document.getElementById('mText');
+    if(orb) orb.className = 'mo' + (awake ? ' awake' : '') + (ttsSpeaking ? ' speaking' : '');
+    if(txt){
+      const r = (replyText.textContent || '').trim();
+      txt.textContent = ttsSpeaking ? (r || '말하는 중...') : (awake ? '듣고 있어요' : '대기 중');
+    }
+  }catch(e){}
+}
+const _mb = document.getElementById('miniBtn');
+if(_mb) _mb.addEventListener('click', toggleMiniJarvis);
+
+// 백그라운드에서 "hey jarvis"를 듣고 서버가 이 페이지를 막 열어준 경우
+// (URL이 ?awake=1). 이미 방금 소리 내어 부른 것이므로 곧바로 활성화합니다.
+// 마이크 권한을 아직 준 적이 없다면 이 시점에 권한 요청 창이 뜹니다.
+if(new URLSearchParams(location.search).get('awake') === '1'){
+  wakeUp();
+}
+</script>
+</body>
+</html>
