@@ -1,4 +1,4 @@
-# ── API 키 (절대 올리면 안 됨) ──
+# ── API 키 ──
 groq_key.txt
 claude_key.txt
 gemini_key.txt
