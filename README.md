@@ -38,14 +38,12 @@
    | `claude_key.txt` | 기본 대화 AI (Claude) | 선택 |
    | `gemini_key.txt` | 여러 명령을 한 번에 말했을 때 나눠서 처리 (예: "유튜브 틀고 소리 줄여줘") | 선택 |
 
-   > 키 파일은 `.gitignore`에 등록되어 있어 깃허브에 올라가지 않습니다. 직접 올리지 않도록 주의하세요.
-
 4. (선택) 사용자 소개를 설정합니다. `boss_info.example.json`을 복사해서 이름을 `boss_info.json`으로 바꾸고 내용을 수정하세요.
    - `intro`: "보스 소개해 줘"라고 했을 때 자비스가 말하는 소개 문장
    - `profile`: 대화 AI가 참고하는 사용자 정보
    - `secret_names`, `affiliation_patterns`, `affiliation_words`, `affiliation_replace`: 체험 모드에서 대답에 나오지 않도록 가릴 이름과 소속, 가린 자리에 넣을 말
 
-   `boss_info.json`은 깃허브에 올라가지 않습니다. 이 파일이 없으면 개인 정보가 없는 기본 소개를 사용합니다.
+   `boss_info.json`이 없으면 기본 소개를 사용합니다.
 
 5. 브라우저는 Chrome 또는 Edge를 권장합니다.
 
@@ -67,7 +65,6 @@
 - 서버는 이 PC(localhost)에서 보낸 명령만 받습니다. Host·Origin 검사와 토큰으로 다른 사이트에서 보낸 요청을 차단합니다.
 - 핸드폰 연결은 사설 IP에서만 허용하며, HTTPS·비밀번호 로그인·HttpOnly 쿠키 세션을 사용합니다. 비밀번호를 5번 틀리면 5분 동안 로그인이 잠깁니다.
 - 체험 모드 비밀번호는 원문이 아닌 PBKDF2 해시로만 저장합니다.
-- API 키, 비밀번호, 인증서, 목소리 데이터, 대화 기록, 개인 정보 파일은 `.gitignore`로 저장소에서 제외했습니다.
 
 ## 만든 사람
 [gch09](https://github.com/gch09)
