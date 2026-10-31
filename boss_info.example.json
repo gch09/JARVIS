@@ -7,7 +7,8 @@
     "Hong Gildong"
   ],
   "affiliation_patterns": [
-    "OO\\s*고(등학교)?\\s*(\\d\\s*학년)?\\s*(학생)?"
+    "OO\\s*(주식회사|회사|팀)?"
   ],
-  "affiliation_words": "(OO\\s*고)"
+  "affiliation_words": "(OO)",
+  "affiliation_replace": ""
 }

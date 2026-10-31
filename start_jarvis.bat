@@ -11,8 +11,6 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-rem 자비스 서버가 오류로 꺼지면 3초 뒤 자동으로 다시 켭니다 (화면도 자동으로 다시 연결됨).
-rem 꺼진 이유는 jarvis_crash.txt 에 남습니다. Ctrl+C 로 끄면 다시 켜지지 않습니다.
 set RESTARTS=0
 :run
 python jarvis_server.py

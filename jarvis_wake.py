@@ -1,19 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-자비스 깨우기 프로그램 (항상 조용히 대기)
-
-  - 박수 2번 짝짝  또는  "Hey Jarvis"  → 자비스 서버가 꺼져 있으면 켜고, 화면을 엽니다.
-  - 자비스 화면이 이미 열려 있으면 아무것도 안 합니다 (마이크를 화면에 양보).
-
-실행:
-  python jarvis_wake.py            # 지금 바로 대기 시작 (창이 떠 있음)
-  python jarvis_wake.py --debug    # 박수 세기/hey jarvis 점수를 화면에 찍어 감도 확인
-  python jarvis_wake.py --install  # 컴퓨터 켤 때마다 자동으로 (창 없이) 대기
-  python jarvis_wake.py --uninstall
-
-필요 패키지: pip install sounddevice numpy openwakeword
-(openwakeword가 없으면 박수 2번만 동작합니다)
-"""
 import json
 import os
 import subprocess
@@ -27,34 +11,27 @@ PORT = 5005
 URL = f"http://localhost:{PORT}/"
 DEBUG = "--debug" in sys.argv
 
-# --- 감도 설정 (잘 안 켜지면 값을 낮추고, 너무 자주 켜지면 올리세요) ---
 WAKE_MODEL_NAME = "hey_jarvis"
-WAKE_THRESHOLD = 0.3        # "hey jarvis" 점수가 이 값을 넘으면 깨움 (0~1)
-CLAP_MIN_PEAK = 0.15        # 박수로 볼 최소 크기 (자동 증폭 후 기준, 0~1)
-CLAP_OVER_NOISE = 6.0       # 주변 소음보다 몇 배 커야 박수로 볼지
-# 노트북 마이크는 파이썬으로 직접 읽으면 아주 작게 들어옵니다(브라우저는 자동으로 키워 줌).
-# 그래서 여기서 소리를 키운 뒤 판단합니다. 그래도 반응이 없으면 더 올리세요.
+WAKE_THRESHOLD = 0.3
+CLAP_MIN_PEAK = 0.15
+CLAP_OVER_NOISE = 6.0
 MIC_GAIN = 12.0
-CLAP_MIN_GAP = 0.12         # 두 박수 사이 최소 간격(초)
-CLAP_MAX_GAP = 0.9          # 두 박수 사이 최대 간격(초)
-COOLDOWN_SEC = 6            # 한 번 깨운 뒤 쉬는 시간
+CLAP_MIN_GAP = 0.12
+CLAP_MAX_GAP = 0.9
+COOLDOWN_SEC = 6
 
 SAMPLE_RATE = 16000
-BLOCK = 320                 # 20ms 단위로 박수를 봅니다 (짧을수록 박수를 정확히 잡음)
-OWW_CHUNK = 1280            # openWakeWord는 80ms 단위
+BLOCK = 320
+OWW_CHUNK = 1280
 
 
 def log(msg):
-    if sys.stdout is None:   # pythonw(창 없음)로 돌 때는 출력할 곳이 없음
+    if sys.stdout is None:
         return
     print(f"[깨우기] {msg}", flush=True)
 
 
-# ---------------------------------------------------------------------------
-# 서버/화면 상태
-# ---------------------------------------------------------------------------
 def server_state():
-    """None: 서버 꺼짐, False: 서버만 켜짐, True: 화면까지 열림"""
     try:
         with urllib.request.urlopen(URL + "alive", timeout=1.5) as r:
             return bool(json.loads(r.read().decode("utf-8")).get("tab"))
@@ -67,10 +44,9 @@ def wake_jarvis(reason):
     if state is True:
         return
     if state is None:
-        # 서버를 새 창으로 켭니다. 서버가 뜨면 화면을 스스로 엽니다.
         py = sys.executable
         if py.lower().endswith("pythonw.exe"):
-            py = py[:-5] + ".exe"   # 서버는 로그가 보이게 일반 python으로
+            py = py[:-5] + ".exe"
         flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
         subprocess.Popen([py, os.path.join(BASE_DIR, "jarvis_server.py")],
                          cwd=BASE_DIR, creationflags=flags)
@@ -78,10 +54,6 @@ def wake_jarvis(reason):
         webbrowser.open(URL)
 
 
-# ---------------------------------------------------------------------------
-# 박수 2번 감지: 주변 소음 대비 '갑자기 튀는' 짧은 소리만 박수로 셉니다.
-# 말소리는 서서히 커지고 길게 이어져서 잘 안 걸립니다.
-# ---------------------------------------------------------------------------
 class ClapDetector:
     def __init__(self):
         self.noise = 0.02
@@ -103,11 +75,9 @@ class ClapDetector:
             else:
                 self.first_at = now
             self.last_at = now
-        # 큰 소리가 계속 이어지면(말/음악) 박수 후보를 취소
         self.loud_blocks = self.loud_blocks + 1 if peak > threshold else 0
         if self.loud_blocks > 6:
             self.first_at = 0.0
-        # 소음 수준은 천천히 따라감 (박수 자체는 거의 반영 안 되게)
         self.noise = 0.995 * self.noise + 0.005 * min(peak, threshold)
         self.prev_peak = peak
         return hit
@@ -131,8 +101,6 @@ def load_wakeword():
 
 
 def run(on_wake=None, is_tab_open=None):
-    """on_wake(reason): 깨울 때 할 일, is_tab_open(): 자비스 화면이 열려 있는지.
-    서버 안에서 부를 때는 서버가 이 둘을 넘겨줍니다. 따로 실행하면 HTTP로 확인합니다."""
     import numpy as np
     import sounddevice as sd
 
@@ -156,7 +124,7 @@ def run(on_wake=None, is_tab_open=None):
 
     def on_audio(indata, _frames, _t, _s):
         if tab_open[0]:
-            return   # 화면이 듣고 있는 동안은 쉼 (자비스 목소리에 반응하지 않게)
+            return
         mono = np.clip(indata[:, 0] * MIC_GAIN, -1.0, 1.0)
         now = time.time()
         level[0] = max(level[0], float(np.max(np.abs(mono))))
@@ -201,9 +169,6 @@ def run(on_wake=None, is_tab_open=None):
                         oww.reset()
 
 
-# ---------------------------------------------------------------------------
-# 윈도우 시작 프로그램 등록/해제
-# ---------------------------------------------------------------------------
 def startup_file():
     folder = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs\Startup")
     return os.path.join(folder, "jarvis_wake.vbs")
@@ -234,7 +199,6 @@ def uninstall():
 
 
 def record_test():
-    """박수/헤이 자비스를 녹음해서 wake_test.wav 로 저장 (감도 맞추기용)"""
     import wave
     import numpy as np
     import sounddevice as sd

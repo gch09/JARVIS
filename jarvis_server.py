@@ -1,13 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-J.A.R.V.I.S. 로컬 서버
-- 브라우저(jarvis.html)에서 오는 명령을 받아 실제로 파일/폴더/프로그램/웹사이트를 열게요.
-- 회원가입/API 키/결제 전혀 필요 없음. 전부 내 컴퓨터 안에서만 동작합니다.
-
-실행 방법:
-    python jarvis_server.py
-그 다음 Chrome에서 자동으로 http://localhost:5005/ 가 열립니다.
-"""
 
 import array
 import ctypes
@@ -47,9 +37,6 @@ try:
 except ImportError:
     HAVE_PSUTIL = False
 
-# 파이썬 쪽 백그라운드 마이크 감지("hey jarvis"/박수) - 원래 기능. 서버를 켜면 화면을 닫아 둔 채
-# 기다리다가 "hey jarvis" 또는 박수 2번에 화면을 엽니다.
-# 바로 화면을 열고 싶으면:  python jarvis_server.py --now
 ENABLE_PY_WAKE = "--now" not in sys.argv and os.environ.get("JARVIS_PY_WAKE", "1") == "1"
 HAVE_AUDIO = False
 HAVE_WAKEWORD = False
@@ -67,17 +54,12 @@ if ENABLE_PY_WAKE:
     except ImportError:
         pass
 
-# 화자 인증(내 목소리만 알아듣기): sherpa-onnx (무료·오픈소스·이 컴퓨터에서만 동작)
-#   설치: pip install sherpa-onnx  (없으면 이 기능만 빠지고 누구 목소리든 알아들음)
 try:
     import sherpa_onnx
     HAVE_SPK = True
 except ImportError:
     HAVE_SPK = False
 
-# edge-tts: 마이크로소프트 신경망 음성을 무료·키 없이 생성 (브라우저 기본 음성보다 자연스러움).
-# 설치돼 있으면 자비스가 이걸로 말하고, 없으면 예전처럼 브라우저 내장 음성을 씁니다.
-#   설치: pip install edge-tts
 try:
     import asyncio as _asyncio
     import edge_tts
@@ -85,31 +67,24 @@ try:
 except ImportError:
     HAVE_EDGE_TTS = False
 
-# Claude API(Anthropic 공식 SDK): claude_key.txt에 키가 있으면 대화 두뇌로 씀. 없거나 실패하면 Groq.
-#   설치: pip install anthropic
 try:
     import anthropic
     HAVE_ANTHROPIC = True
 except ImportError:
     HAVE_ANTHROPIC = False
 
-# edge-tts 음성 (영국식 남성 = 자비스 느낌 / 한국어 남성). 목록: `edge-tts --list-voices`
-EDGE_VOICE_EN = os.environ.get("JARVIS_EDGE_VOICE_EN", "en-US-EricNeural")       # 이성적이고 차분한 영어 (예전: Ryan)
-EDGE_VOICE_KO = os.environ.get("JARVIS_EDGE_VOICE_KO", "ko-KR-InJoonNeural")  # 한국어 남성. 현수(Multilingual)는 첫 소리까지 2~4초 걸려서 인준(약 1초)으로 바꿈
-# 번역한 말을 그 나라 목소리로 읽기 (모두 무료 edge-tts 남성 음성)
+EDGE_VOICE_EN = os.environ.get("JARVIS_EDGE_VOICE_EN", "en-US-EricNeural")
+EDGE_VOICE_KO = os.environ.get("JARVIS_EDGE_VOICE_KO", "ko-KR-InJoonNeural")
 EDGE_VOICE_OTHER = {"ja": "ja-JP-KeitaNeural", "zh-CN": "zh-CN-YunxiNeural", "es": "es-ES-AlvaroNeural",
                     "fr": "fr-FR-HenriNeural", "de": "de-DE-ConradNeural"}
-EDGE_RATE = os.environ.get("JARVIS_EDGE_RATE", "+35%")    # 기본 1.35배속 (말로 '1.5배속으로 말해'처럼 바꿀 수 있음, 예전 +22%)
+EDGE_RATE = os.environ.get("JARVIS_EDGE_RATE", "+35%")
 EDGE_RATE_DEFAULT = EDGE_RATE
-EDGE_PITCH = os.environ.get("JARVIS_EDGE_PITCH", "-7Hz")  # 조금 낮고 묵직하게 (자비스 느낌)  # 말 속도 (+가 빠름)
+EDGE_PITCH = os.environ.get("JARVIS_EDGE_PITCH", "-7Hz")
 
 HAVE_WINDLL = hasattr(ctypes, "windll")
 
 PORT = 5005
-# 업데이트할 때마다 0.1씩 올립니다. 화면 하단과 "버전 알려줘" 음성에 반영됩니다.
-JARVIS_VERSION = os.environ.get("JARVIS_VERSION", "14.2")
-# 안전장치: 실수로 말이 잘못 인식돼 컴퓨터가 꺼지는 것을 막기 위해, "컴퓨터 종료/재부팅"
-# 음성 명령을 기본으로 꺼둡니다. 정말로 음성으로 PC를 끄고 싶으면 True로 바꾸세요.
+JARVIS_VERSION = os.environ.get("JARVIS_VERSION", "14.3")
 ALLOW_COMPUTER_POWER = os.environ.get("JARVIS_ALLOW_SHUTDOWN", "0") == "1"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_PATH = os.path.join(BASE_DIR, "jarvis.html")
@@ -118,33 +93,27 @@ LOG_PATH = os.path.join(BASE_DIR, "jarvis_log.txt")
 LOG_LOCK = threading.Lock()
 
 WAKE_MODEL_NAME = "hey_jarvis"
-WAKE_THRESHOLD = 0.4    # "hey jarvis" 인식 민감도(0~1). 낮출수록 잘 반응하지만 오작동↑
-WAKE_DEBUG = False      # True면 "hey jarvis" 점수를 콘솔에 찍어 인식 상태를 눈으로 확인 (문제 해결 후 False로)
+WAKE_THRESHOLD = 0.4
+WAKE_DEBUG = False
 WAKE_SAMPLE_RATE = 16000
-WAKE_CHUNK_SAMPLES = 1280  # openWakeWord 요구사항: 16kHz 기준 80ms
+WAKE_CHUNK_SAMPLES = 1280
 WAKE_COOLDOWN_SEC = 5
 
-# "박수 2번"으로 깨우기 (openwakeword 없이 numpy+sounddevice만으로도 동작).
-# 박수는 아주 짧고 큰 소리이므로, 조용하다가 순간적으로 진폭이 치솟는 순간
-# (onset)을 한 번의 박수로 세고, 짧은 시간 안에 두 번 감지되면 화면을 열게요.
 CLAP_ENABLED = True
-CLAP_PEAK_THRESHOLD = 0.18   # 이 진폭(0~1)을 넘으면 큰 소리로 간주 (너무 자주 켜지면 값을 올리세요)
-CLAP_QUIET_THRESHOLD = 0.07  # 이 값 아래로 내려가야 다음 박수를 새로 셉니다 (직전 대비 조용해짐)
-CLAP_MIN_GAP_SEC = 0.12      # 박수 사이 최소 간격 (한 번의 박수가 여러 번 세지는 것 방지)
-CLAP_MAX_GAP_SEC = 1.0       # 두 박수 사이 최대 간격 (이 안에 두 번이면 인정)
-CLAP_COOLDOWN_SEC = 5        # 한 번 켜진 뒤 재감지까지 쉬는 시간
-CLAP_DEBUG = False           # True면 박수/큰 소리의 피크 값을 콘솔에 찍어 임계값 조정을 돕습니다 (조정 후 False)
-CLAP_DEBUG_MIN = 0.08        # 이 값보다 큰 피크만 디버그로 찍습니다 (너무 작은 잡음은 생략)
+CLAP_PEAK_THRESHOLD = 0.18
+CLAP_QUIET_THRESHOLD = 0.07
+CLAP_MIN_GAP_SEC = 0.12
+CLAP_MAX_GAP_SEC = 1.0
+CLAP_COOLDOWN_SEC = 5
+CLAP_DEBUG = False
+CLAP_DEBUG_MIN = 0.08
 
-# 이미 브라우저 탭이 열려서 계속 /stats를 폴링하고 있다면, "hey jarvis"를
-# 들었을 때 새 탭을 또 열지 않고 그 탭을 깨우기만 합니다. 이 두 값이 그 상태를
-# 스레드 세이프하게 주고받는 용도입니다 (마이크 콜백 스레드 <-> HTTP 요청 스레드).
 ACTIVITY_LOCK = threading.Lock()
 LAST_SEEN_AT = 0.0
 WAKE_PENDING = False
 
 
-DASHBOARD_CLOSED = False   # 화면이 닫히면서 /bye 로 알려 줌
+DASHBOARD_CLOSED = False
 
 
 def mark_seen():
@@ -161,8 +130,6 @@ def mark_closed():
 
 
 def tab_likely_open():
-    """자비스 화면이 열려 있는지. 다른 창을 쓰는 동안 브라우저가 뒤쪽 화면의 신호를 늦출 수 있어서
-    90초까지는 열려 있다고 봄 (화면을 닫으면 /bye 로 바로 알려 주므로 그때는 즉시 '닫힘')."""
     with ACTIVITY_LOCK:
         return (not DASHBOARD_CLOSED) and (time.time() - LAST_SEEN_AT) < 90
 
@@ -180,33 +147,19 @@ def consume_wake_pending():
         WAKE_PENDING = False
         return pending
 
-# 브라우저의 다른 탭(악성/무관한 웹사이트)이 이 서버로 몰래 명령을 보내는 것을
-# 막기 위해, jarvis.html이 실제로 서비스되는 origin만 허용합니다.
 ALLOWED_ORIGINS = {f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"}
 ALLOWED_HOSTS = {f"localhost:{PORT}", f"127.0.0.1:{PORT}"}
-MAX_JSON_BYTES = 64 * 1024            # 명령·위치 같은 짧은 요청
-MAX_AUDIO_BYTES = 15 * 1024 * 1024    # 녹음 (12초 16kHz WAV는 약 0.4MB)
+MAX_JSON_BYTES = 64 * 1024
+MAX_AUDIO_BYTES = 15 * 1024 * 1024
 
-# Origin 헤더는 브라우저가 보장해주지만, 같은 PC에서 실행되는 다른 프로그램이
-# Origin을 그대로 흉내내 curl 등으로 직접 호출하는 것까지는 막지 못합니다.
-# 그래서 서버를 실행할 때마다 무작위 토큰을 만들어 jarvis.html에 심어두고,
-# 이 토큰을 아는 요청만 실행하도록 한 번 더 검증합니다.
 SERVER_TOKEN = secrets.token_hex(16)
 TOKEN_HEADER = "X-Jarvis-Token"
 
-# --- 핸드폰 연결: 같은 와이파이의 폰 브라우저에서 https://(PC 주소):5006 으로 자비스를 씀 ---
-# 폰 브라우저는 https에서만 마이크를 허락해서 인증서를 직접 만들어 씀 (처음 한 번 '안전하지 않음' 경고 → 계속).
-# 같은 와이파이(사설 IP)에서만, 그리고 비밀번호(체험 모드 끄는 비밀번호)로 로그인해야만 쓸 수 있음.
 PHONE_ENABLED = os.environ.get("JARVIS_PHONE", "1") != "0"
 PHONE_PORT = int(os.environ.get("JARVIS_PHONE_PORT", "5006"))
 PHONE_COOKIE = "jarvis_phone"
 PHONE_SESSION_DAYS = 30
 
-# ---------------------------------------------------------------------------
-# 서버가 꺼지면 이유를 파일에 남김 (콘솔 창이 닫히면 에러 글씨도 같이 사라지므로)
-#   jarvis_crash.txt: 시작/종료, 오류 내용, 창 닫힘 같은 종료 신호
-#   jarvis_run.json:  지금 실행 상태 (30초마다 '살아 있음' 시각을 적음)
-# ---------------------------------------------------------------------------
 CRASH_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis_crash.txt")
 RUN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis_run.json")
 _RUN = {"crashed": False, "fh": None, "ctrl": None, "owner": False}
@@ -234,7 +187,6 @@ def _run_state(**kw):
 
 
 def mark_server_running():
-    """서버가 포트를 잡은 뒤부터 '실행 중'으로 기록하고 30초마다 살아 있음을 적음."""
     _RUN["owner"] = True
     now = time.strftime("%Y-%m-%d %H:%M:%S")
     _run_state(state="running", pid=os.getpid(), started=now, alive=now)
@@ -250,7 +202,6 @@ def install_crash_logging(version):
     import atexit
     import faulthandler
     import traceback
-    # 지난번 실행이 '정상 종료' 기록 없이 끝났으면 언제쯤 꺼졌는지 남김
     try:
         with open(RUN_FILE, encoding="utf-8") as f:
             prev = json.load(f)
@@ -261,7 +212,6 @@ def install_crash_logging(version):
     except Exception:
         pass
     _crash_note(f"[시작] v{version} pid {os.getpid()}")
-    # 파이썬 자체가 튕기는 오류(메모리 접근 오류 등)도 어느 줄에서 났는지 남김
     try:
         _RUN["fh"] = open(CRASH_LOG, "a", encoding="utf-8")
         faulthandler.enable(file=_RUN["fh"], all_threads=True)
@@ -291,7 +241,6 @@ def install_crash_logging(version):
     if os.name == "nt":
         try:
             k32 = ctypes.windll.kernel32
-            # 콘솔 창 닫기(X)·로그오프·컴퓨터 종료 신호를 받으면 기록
             names = {0: "Ctrl+C", 1: "Ctrl+Break", 2: "콘솔 창을 닫음(X)", 5: "로그오프", 6: "컴퓨터 종료"}
 
             @ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)
@@ -299,10 +248,9 @@ def install_crash_logging(version):
                 _crash_note(f"[종료 신호] {names.get(ev, ev)}")
                 if ev in (2, 5, 6) and _RUN["owner"]:
                     _run_state(state="stopped", stopped=time.strftime("%Y-%m-%d %H:%M:%S"))
-                return 0   # 원래 처리(종료)는 그대로
+                return 0
             _RUN["ctrl"] = _on_ctrl
             k32.SetConsoleCtrlHandler(_on_ctrl, True)
-            # 콘솔 창을 마우스로 클릭하면(빠른 편집 모드) 글씨 출력이 멈추면서 서버 전체가 멈추는 문제 방지
             h = k32.GetStdHandle(-10)
             mode = ctypes.c_uint()
             if k32.GetConsoleMode(h, ctypes.byref(mode)):
@@ -310,11 +258,8 @@ def install_crash_logging(version):
         except Exception:
             pass
 
-# ---------------------------------------------------------------------------
-# 자주 쓰는 웹사이트 (필요하면 자유롭게 추가하세요)
-# ---------------------------------------------------------------------------
 WEBSITES = {
-    "유튜브 뮤직": "https://music.youtube.com",   # '유튜브'보다 먼저 확인되도록 위에
+    "유튜브 뮤직": "https://music.youtube.com",
     "유튜브뮤직": "https://music.youtube.com",
     "유튜브": "https://youtube.com",
     "구글": "https://google.com",
@@ -332,9 +277,6 @@ WEBSITES = {
     "날씨": "https://weather.naver.com",
 }
 
-# ---------------------------------------------------------------------------
-# 자주 쓰는 폴더 (Windows 표준 사용자 폴더 이름 기준)
-# ---------------------------------------------------------------------------
 HOME = os.path.expanduser("~")
 _KNOWN_FOLDER_IDS = {
     "Desktop": "B4BFCC3A-DB2C-424C-B029-7FE99A87C641", "Documents": "FDD39AD0-238F-46AF-ADB4-6C85480369C7",
@@ -344,7 +286,6 @@ _KNOWN_FOLDER_IDS = {
 
 
 def known_folder(name):
-    """윈도우가 실제로 쓰는 폴더 위치 (예: 바탕화면이 OneDrive\\바탕 화면으로 옮겨진 경우)."""
     try:
         import ctypes as _ct
         import uuid as _uuid
@@ -373,10 +314,8 @@ FOLDER_KEYWORDS = {
     "비디오": KNOWN["Videos"],
 }
 
-# 파일/폴더 검색 대상 (너무 오래 걸리지 않도록 범위 제한)
 SEARCH_DIRS = list(dict.fromkeys(list(KNOWN.values()) + [os.path.join(HOME, d) for d in
                                    ("Desktop", "Downloads", "Documents", "Pictures", "Music", "Videos")]))
-# 폴더를 훑을 때 건너뛸 곳 (양이 많고 열 일이 없는 폴더)
 SKIP_DIR_NAMES = {"node_modules", ".git", "__pycache__", ".venv", "venv", "appdata", "$recycle.bin",
                   ".cache", "site-packages", ".idea", ".vscode", "dist", "build",
                   "windows", "program files", "program files (x86)", "programdata", "system volume information"}
@@ -390,14 +329,13 @@ VERB_STOPWORDS = [
 
 
 def has_batchim(word):
-    """마지막 글자에 받침이 있는지 확인 (조사 선택용)"""
     if not word:
         return False
     ch = word[-1]
     code = ord(ch)
     if 0xAC00 <= code <= 0xD7A3:
         return (code - 0xAC00) % 28 != 0
-    if ch.isdigit():   # 숫자는 읽는 소리로: 영·일·삼·육·칠·팔(받침 있음) / 이·사·오·구(없음)
+    if ch.isdigit():
         return ch in "013678"
     return False
 
@@ -410,7 +348,6 @@ UWP_PREFIX = "uwp:"
 
 
 def _guest_open_denied(path):
-    """체험 모드: 허용된 프로그램(크롬·계산기·메모장·엣지)이 아니면 열지 않음 (폴더·파일·다른 앱)."""
     if guest_on() and not guest_program_ok(None, path):
         print(f"[JARVIS] 체험 모드라서 열지 않았어요: {os.path.basename(str(path))}")
         return True
@@ -421,10 +358,6 @@ def open_path(path):
     if _guest_open_denied(path):
         return False
     if isinstance(path, str) and path.startswith(UWP_PREFIX):
-        # 스토어(UWP) 앱은 일반 파일 경로가 아니라 AppsFolder를 통해 열어야 합니다.
-        # os.startfile(ShellExecute)이 "shell:" 경로를 직접 처리할 수 있어서, explorer.exe를
-        # 새로 띄워 경유하는 것보다 앱이 뜨기까지 걸리는 시간이 꽤 줄어듭니다
-        # (계산기 기준 실측 약 880ms -> 490ms). 혹시 실패하면 예전 방식으로 대체합니다.
         app_id = path[len(UWP_PREFIX):]
         try:
             os.startfile(f"shell:AppsFolder\\{app_id}")
@@ -432,10 +365,9 @@ def open_path(path):
         except Exception:
             return run_hidden(["explorer.exe", f"shell:AppsFolder\\{app_id}"])
     try:
-        os.startfile(path)  # Windows 전용
+        os.startfile(path)
         return True
     except AttributeError:
-        # Windows가 아닌 환경 대비 (개발/테스트용)
         try:
             subprocess.Popen(["xdg-open", path])
             return True
@@ -449,7 +381,6 @@ SW_MAXIMIZE = 3
 
 
 def _visible_windows_of_class(class_name):
-    """지정한 윈도우 클래스에 해당하는, 현재 화면에 보이는 창들의 핸들 집합."""
     user32 = ctypes.windll.user32
     found = set()
 
@@ -469,8 +400,6 @@ def _visible_windows_of_class(class_name):
 
 
 def open_path_maximized(path, class_name="CabinetWClass", timeout=2.0):
-    """path를 열고, 새로 뜬 창(기본값: 탐색기 창)을 찾아 최대화합니다.
-    새 창을 못 찾거나 Windows가 아니면 그냥 보통 크기로 열립니다."""
     if _guest_open_denied(path):
         return False
     if not HAVE_WINDLL:
@@ -498,7 +427,6 @@ def open_path_maximized(path, class_name="CabinetWClass", timeout=2.0):
 
 
 def run_hidden(args):
-    """검은 콘솔 창을 띄우지 않고 시스템 명령을 열게요."""
     try:
         kwargs = {}
         if hasattr(subprocess, "CREATE_NO_WINDOW"):
@@ -509,9 +437,6 @@ def run_hidden(args):
         return False
 
 
-# ---------------------------------------------------------------------------
-# 설치된 프로그램 자동 탐색 (시작 메뉴 바로가기 스캔)
-# ---------------------------------------------------------------------------
 def build_program_index():
     index = {}
     start_menu_dirs = []
@@ -541,9 +466,6 @@ def build_program_index():
 
 
 def run_powershell_json(script, timeout=20):
-    """PowerShell 명령을 실행해 JSON으로 파싱한 결과를 반환합니다. 명령이 없거나
-    실패하거나 시간 초과되면 조용히 None을 반환합니다 (이 정보들은 전부
-    "있으면 쓰고 없으면 그만"인 보조 정보라서, 실패해도 서버 동작을 막으면 안 됩니다)."""
     try:
         result = subprocess.run(
             ["powershell", "-NoProfile", "-Command", script],
@@ -557,9 +479,6 @@ def run_powershell_json(script, timeout=20):
 
 
 def build_uwp_index():
-    """Spotify, 넷플릭스, 사진 등 마이크로소프트 스토어(UWP) 앱은 보통 시작 메뉴에
-    평범한 .lnk 바로가기가 없어서 build_program_index()로는 못 찾습니다.
-    PowerShell의 Get-StartApps로 이런 앱까지 함께 찾습니다."""
     index = {}
     data = run_powershell_json("Get-StartApps | ConvertTo-Json -Compress")
     if not data:
@@ -577,14 +496,11 @@ def build_uwp_index():
 
 PROGRAM_INDEX = build_program_index()
 for _key, _val in build_uwp_index().items():
-    # "실행"(Win+R 실행 대화상자)처럼 앱 이름이 "실행해줘" 같은 명령 동사와
-    # 겹치면, "OO 실행해줘"라는 흔한 말투가 전부 그 앱으로 잘못 매칭됩니다.
     if any(_key in vs for vs in VERB_STOPWORDS):
         continue
     PROGRAM_INDEX.setdefault(_key, _val)
 PROGRAM_KEYS_SORTED = sorted(PROGRAM_INDEX.keys(), key=len, reverse=True)
 
-# 시작 메뉴 바로가기 이름이 영문이라 한국어 애칭으로는 못 찾는 경우를 위한 별칭
 PROGRAM_ALIASES = {
     "크롬": "chrome",
     "구글크롬": "chrome",
@@ -626,8 +542,6 @@ PROGRAM_ALIASES = {
     "파워쉘": "windows powershell",
 }
 
-# 시작 메뉴에 바로가기가 없는 윈도우 내장 프로그램 (예: "메모장"이 서드파티
-# "Notepad++" 같은 유사한 이름에 잘못 매칭되는 것을 막기 위해 우선 확인)
 _WINDIR = os.environ.get("WINDIR", r"C:\Windows")
 SYSTEM_PROGRAMS = {}
 for _name, _rel in (
@@ -646,14 +560,12 @@ for _name, _rel in (
 
 
 def find_program(cmd_lower):
-    # 1) 시작 메뉴 바로가기 이름과 직접 매칭 (긴 이름 우선)
     for key in PROGRAM_KEYS_SORTED:
         if len(key) < 2:
             continue
         if key in cmd_lower or cmd_lower in key:
             return key, PROGRAM_INDEX[key]
 
-    # 2) 한국어 애칭 -> 영문 키워드로 변환 후 재매칭
     for alias, target in PROGRAM_ALIASES.items():
         if alias in cmd_lower:
             if target in SYSTEM_PROGRAMS:
@@ -664,9 +576,6 @@ def find_program(cmd_lower):
                 chosen = exact[0] if exact else min(matches, key=len)
                 return chosen, PROGRAM_INDEX[chosen]
 
-    # 3) 유사 이름 매칭 (음성 인식 오타/발음 오류 허용)
-    #    cutoff를 낮출수록 발음이 조금 뭉개져도 더 잘 잡지만, 너무 낮추면 엉뚱한
-    #    프로그램을 열 수 있습니다 (0.72 -> 0.60 으로 완화).
     keyword = strip_verbs(cmd_lower)
     if keyword and len(keyword) >= 2 and PROGRAM_INDEX:
         close = difflib.get_close_matches(keyword, PROGRAM_INDEX.keys(), n=1, cutoff=0.60)
@@ -684,16 +593,13 @@ def strip_verbs(text):
     return " ".join(cleaned.split()).strip()
 
 
-# ---------------------------------------------------------------------------
-# 파일 검색 인덱스 (매 명령마다 폴더를 훑지 않도록 백그라운드에서 주기적으로 캐싱)
-# ---------------------------------------------------------------------------
 FILE_INDEX = {}
 FILE_INDEX_LOCK = threading.Lock()
 FILE_INDEX_REFRESH_SEC = 30
 MAX_INDEX_FILES = 20000
 
 
-FOLDER_INDEX = []   # [(폴더 이름 소문자, 전체 경로, 깊이)]
+FOLDER_INDEX = []
 MAX_INDEX_FOLDERS = 20000
 
 
@@ -701,7 +607,6 @@ def build_file_index():
     idx = {}
     folders = []
     count = 0
-    # 홈 폴더 바로 아래 폴더들도 (예: C:\Users\이름\source, 프로젝트 폴더)
     try:
         for d in os.listdir(HOME):
             p = os.path.join(HOME, d)
@@ -737,7 +642,6 @@ def refresh_file_index():
 
 
 def file_index_worker():
-    # 서버 시작을 막지 않도록 첫 인덱스도 백그라운드에서 만듭니다.
     while True:
         try:
             refresh_file_index()
@@ -746,9 +650,8 @@ def file_index_worker():
         time.sleep(FILE_INDEX_REFRESH_SEC)
 
 
-# "파일 탐색기에서 자비스 폴더 열어줘", "다운로드에서 숙제 폴더 열어줘", "바탕화면에 있는 ctf 폴더 열어줘"
 RE_FOLDER_OPEN = re.compile(r"^(.*?)\s*폴더\s*(?:를|을)?\s*(?:좀\s*)?(?:열어|열기|열|보여|띄워|켜|찾아|들어가)")
-_LOCATION_HINTS = [   # (말, 찾을 위치) - 받아쓰기 실수(가탕화면)도 허용
+_LOCATION_HINTS = [
     (r"다운로드|다운로드\s*폴더", KNOWN["Downloads"]),
     (r"[바가파]탕\s*화면|데스크\s*탑", KNOWN["Desktop"]),
     (r"문서", KNOWN["Documents"]),
@@ -763,14 +666,12 @@ _LOCATION_PREFIX_RE = re.compile(
 
 
 def _canon_loc(loc):
-    """받아쓰기 실수까지 포함한 위치 말을 바른 이름으로 (가탕화면 → 바탕화면)"""
     if re.search(r"[바가파]탕\s*화면|데스크\s*탑", loc or ""):
         return "바탕화면"
     return (loc or "").replace(" ", "")
 
 
 def _norm_name(t):
-    # 압축을 푼 한글 이름은 글자가 풀어진(NFD) 형태로 저장되는 경우가 있어 하나로 맞춤
     t = unicodedata.normalize("NFC", t or "")
     return re.sub(r"[\s_\-.()\[\]]", "", t.lower())
 
@@ -783,7 +684,6 @@ def _mtime(p):
 
 
 def _hangul_to_english_guess(name):
-    """한글로 말한 영어 폴더 이름(예: 자비스 → jarvis)을 AI로 추측. 실패하면 []."""
     if not re.search(r"[가-힣]", name):
         return []
     out = _groq_request([
@@ -795,11 +695,9 @@ def _hangul_to_english_guess(name):
 
 
 def find_folder(name, base=None):
-    """폴더 이름으로 찾기: 정확히 같은 이름 → 이름에 포함 → 비슷한 이름 순. (경로, 후보 수) 또는 (None, 0)"""
     with FILE_INDEX_LOCK:
         folders = list(FOLDER_INDEX)
     if base and os.path.isdir(base) and not any(p.startswith(base) for _, p, _ in folders):
-        # 드라이브처럼 인덱스에 없는 곳은 그때 얕게 훑음
         for root, dirs, _files in os.walk(base):
             dirs[:] = [d for d in dirs if d.lower() not in SKIP_DIR_NAMES and not d.startswith(("$", "."))]
             depth = root[len(base):].count(os.sep)
@@ -814,7 +712,6 @@ def find_folder(name, base=None):
     if not folders or not _norm_name(name):
         return None, 0
     normed = [(_norm_name(n), p, d) for n, p, d in folders]
-    # 말한 그대로 먼저 찾고, 없을 때만 한글→영어 추측(자비스→jarvis)으로 다시 찾음
     found = _match_folder([_norm_name(name)], normed)
     if found[0]:
         return found
@@ -826,7 +723,7 @@ def _match_folder(targets, normed):
     if not targets:
         return None, 0
     for rule in ("exact", "contains", "fuzzy"):
-        hits = []   # (이름 차이, 깊이, 경로)
+        hits = []
         for t in targets:
             if rule == "exact":
                 hits += [(0, d, p) for n, p, d in normed if n == t]
@@ -838,7 +735,6 @@ def _match_folder(targets, normed):
                 for close in difflib.get_close_matches(t, names, n=3, cutoff=0.75):
                     hits += [(abs(len(close) - len(t)), d, p) for n, p, d in normed if n == close]
         if hits:
-            # 이름이 가장 비슷한 것 → 바깥쪽(얕은) 폴더 → 최근에 쓴 폴더 순
             hits.sort(key=lambda h: (h[0], h[1], -_mtime(h[2])))
             return hits[0][2], len({h[2] for h in hits})
     return None, 0
@@ -849,7 +745,6 @@ _NESTED_RE = re.compile(r"(?P<parent>[^\s]+)\s*폴더\s*(?:를|을)?\s*(?:열고
 
 
 def _nested_folder(cmd):
-    """'A 폴더에서 B …' / 'A 폴더를 열고 거기서 B …' → (A 폴더 경로, 'B …'). 아니면 (None, cmd)"""
     nm = _NESTED_RE.search(cmd)
     if not nm:
         return None, cmd
@@ -887,7 +782,6 @@ def handle_folder_open(cmd, inside=None):
         base = inside
     name = re.sub(r"^(?:에서|에|안에|의|있는|그|그거|이|저)\s+", "", name)
     name = re.sub(r"\s*(?:이라는|라는|이란|란)$", "", name).strip(" ,.'\"")
-    # 이름 없이 "다운로드 폴더 열어줘"면 기본 폴더 처리(아래 7번)로 넘김
     if not name or any(re.fullmatch(p, name.replace(" ", "")) for p, _ in _LOCATION_HINTS) \
             or name in FOLDER_KEYWORDS or re.fullmatch(r"(?:파일\s*)?탐색기", name):
         return None
@@ -902,7 +796,7 @@ def handle_folder_open(cmd, inside=None):
     return {"reply": f"네, {where}{os.path.basename(path)} 폴더를 열었어요.{extra}", "action": "folder", "matched": path}
 
 
-_FILE_KINDS = [   # (말, 확장자들, 부를 이름)
+_FILE_KINDS = [
     (r"ppt|pptx|피피티|파워\s*포인트|발표\s*자료", (".pptx", ".ppt"), "PPT"),
     (r"pdf|피디에프", (".pdf",), "PDF"),
     (r"한글\s*파일|hwp|한글\s*문서", (".hwp", ".hwpx"), "한글 파일"),
@@ -919,7 +813,6 @@ RE_FILE_OPEN = re.compile(r"^(.*?)\s*(?:이라는|라는|이란|란)?\s*(" + "|"
 
 
 def find_file_named(name, exts=None, base=None):
-    """파일 이름(확장자 빼고)으로 찾기: 똑같은 이름 → 이름에 포함 → 비슷한 이름 → 한글→영어 추측."""
     with FILE_INDEX_LOCK:
         files = list(FILE_INDEX.values())
     if base:
@@ -957,7 +850,7 @@ def handle_file_open(cmd, inside=None):
     name = (phrase[lm.end():] if lm else phrase).strip()
     name = re.sub(r"\s*(?:이라는|라는|이란|란)$", "", name).strip(" ,.'\"")
     if not name:
-        return None   # "ppt 열어줘"처럼 이름이 없으면 프로그램 열기로 넘김
+        return None
     base = None
     if loc:
         for pat, path in _LOCATION_HINTS:
@@ -969,7 +862,6 @@ def handle_file_open(cmd, inside=None):
     path, n = find_file_named(name, exts, base)
     where = (_canon_loc(loc) + "에서 ") if loc else (os.path.basename(inside) + " 폴더에서 " if inside else "")
     if not path:
-        # "유튜브 영상 틀어줘"처럼 파일이 아닐 수도 있는 말은 다른 기능(유튜브·음악 등)으로 넘김
         if not loc and kind_name in ("영상", "사진", "음악 파일", "파일"):
             return None
         scope = loc or (os.path.basename(inside) + " 폴더" if inside else "바탕화면, 다운로드, 문서")
@@ -991,16 +883,12 @@ def search_file(query):
     return None
 
 
-# ---------------------------------------------------------------------------
-# 시스템 제어 (볼륨 / 화면 잠금 / 절전 / 종료 / 재부팅)
-# ---------------------------------------------------------------------------
 VK_VOLUME_MUTE = 0xAD
 VK_VOLUME_DOWN = 0xAE
 VK_VOLUME_UP = 0xAF
 KEYEVENTF_KEYUP = 0x0002
 
 
-# 진짜 음소거 상태를 읽고 바꿈 (음소거 키는 누를 때마다 켜짐/꺼짐이 바뀌어서, 두 번 들으면 도로 풀려 버림)
 _AUDIO_EP = {"iface": None}
 
 
@@ -1042,13 +930,12 @@ def _endpoint_volume():
                                (["out"], POINTER(POINTER(IMMDevice))))]
 
     en = CoCreateInstance(GUID("{BCDE0395-E52F-467C-8E3D-C4579291692E}"), IMMDeviceEnumerator, CLSCTX_ALL)
-    dev = en.GetDefaultAudioEndpoint(0, 1)   # 스피커, 기본(멀티미디어) 장치
+    dev = en.GetDefaultAudioEndpoint(0, 1)
     ptr = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
     return cast(ptr, POINTER(IAudioEndpointVolume))
 
 
 def system_muted():
-    """컴퓨터 소리가 음소거 상태면 True, 아니면 False, 알 수 없으면 None"""
     if not HAVE_WINDLL:
         return None
     try:
@@ -1058,7 +945,6 @@ def system_muted():
 
 
 def set_system_mute(on):
-    """음소거 켜기/끄기 (이미 그 상태면 그대로). 진짜 상태를 못 읽으면 예전처럼 음소거 키로"""
     st = system_muted()
     if st is None:
         return press_key(VK_VOLUME_MUTE)
@@ -1110,9 +996,6 @@ def system_cancel_shutdown():
     return run_hidden(["shutdown", "/a"])
 
 
-# ---------------------------------------------------------------------------
-# 실행 중인 프로그램 종료
-# ---------------------------------------------------------------------------
 PROTECTED_PROCESSES = {
     "system", "system idle process", "registry", "smss.exe", "csrss.exe", "wininit.exe", "winlogon.exe",
     "services.exe", "lsass.exe", "svchost.exe", "dwm.exe", "explorer.exe", "fontdrvhost.exe", "sihost.exe",
@@ -1131,19 +1014,16 @@ def find_running_process(cmd_lower):
     except Exception:
         return None
 
-    # 윈도우가 멈추거나 자비스 자신이 꺼지는 걸 막기 위해 절대 끄지 않는 프로그램
     me = os.getpid()
     procs = [p for p in procs
              if p.pid != me and (p.info.get("name") or "").lower() not in PROTECTED_PROCESSES]
 
-    # 1) 실행 중인 프로세스 이름이 명령 문장에 직접 들어있는 경우
     for proc in procs:
         name = proc.info.get("name") or ""
         base = name[:-4] if name.lower().endswith(".exe") else name
         if len(base) >= 3 and base.lower() in cmd_lower:
             return proc, base
 
-    # 2) 한국어 애칭 -> 영문 키워드로 변환 후 재매칭
     for alias, target in PROGRAM_ALIASES.items():
         if alias in cmd_lower:
             for proc in procs:
@@ -1159,11 +1039,6 @@ WM_CLOSE = 0x0010
 
 
 def post_close_to_windows(pid):
-    """PID가 소유한 최상위 창에 WM_CLOSE 메시지를 보냅니다.
-    강제 종료(TerminateProcess)와 달리, 창을 X 버튼으로 닫는 것과 동일하게
-    동작하므로 앱이 "저장하시겠습니까?" 같은 대화상자를 스스로 띄울 수 있습니다.
-    창을 하나 이상 찾아 메시지를 보냈으면 True, 못 찾았으면 False를 반환합니다.
-    """
     if not HAVE_WINDLL:
         return False
     user32 = ctypes.windll.user32
@@ -1186,10 +1061,6 @@ def post_close_to_windows(pid):
 
 
 def close_app(cmd_lower):
-    """실행 중인 프로그램을 끌게요. 반환값은 (표시용 이름 또는 None, graceful 여부).
-    가능하면 창에 닫기 요청만 보내고(graceful=True), 보이는 창이 없는 경우에만
-    강제 종료로 대체합니다(graceful=False).
-    """
     found = find_running_process(cmd_lower)
     if not found:
         return None, False
@@ -1203,9 +1074,6 @@ def close_app(cmd_lower):
         return None, False
 
 
-# ---------------------------------------------------------------------------
-# 감사 로그 (나중에 "왜 이런 일이 있었지?" 확인할 수 있도록 실행 기록을 남김)
-# ---------------------------------------------------------------------------
 def log_command(command, result):
     line = "{}\t{}\t{}\t{}\t{}\n".format(
         time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1222,9 +1090,6 @@ def log_command(command, result):
         pass
 
 
-# ---------------------------------------------------------------------------
-# 명령 해석용 정규식
-# ---------------------------------------------------------------------------
 URL_RE = re.compile(r"(https?://\S+|\b[\w-]+\.(com|net|org|co\.kr|kr|io)\b)")
 
 RE_CANCEL = re.compile(r"취소")
@@ -1233,7 +1098,6 @@ RE_RESTART = re.compile(r"(재부팅|재시작)")
 RE_SLEEP = re.compile(r"(절전|재워줘|잠재워줘|슬립\s*모드)")
 RE_LOCK = re.compile(r"(화면\s*잠|잠금|잠가줘|잠궈줘|락\s*걸)")
 RE_SHUTDOWN = re.compile(r"(종료|꺼줘|꺼라)")
-# 컴퓨터 전원을 실제로 끄는 명확한 명령. "전원"이라는 단어가 있을 때만 동작해 오작동을 막습니다.
 RE_POWER_OFF = re.compile(r"전원\s*(을|좀)?\s*(꺼|끄|내려|오프|off|종료)")
 RE_VOLUME = re.compile(r"(볼륨|소리)")
 RE_UNMUTE = re.compile(r"((음소거|뮤트|묵음)\s*(를|을)?\s*(풀|해제|끄|꺼|취소|없애)|(소리|볼륨)\s*(를|을)?\s*(다시\s*)?(켜|살려|돌려))")
@@ -1245,18 +1109,15 @@ RE_SECURITY_CHECK = re.compile(r"보안\s*(상태)?\s*(확인|점검)")
 RE_VERSION = re.compile(r"(버전|version|몇\s*버전|버전\s*(뭐|알려|몇))")
 RE_WEATHER = re.compile(r"(날씨|기온|온도|더워|추워|더운지|추운지|비\s*(와|오|온)|눈\s*(와|오|온))")
 RE_TIME = re.compile(r"(몇\s*시|시간\s*(알려|말|어)|지금\s*시간|현재\s*시(각|간))")
-# 지금 시각을 묻는 말인지 ('부스 몇 시까지 해요?', '이따 몇 시에 집에 가?', '몇 시간 걸려?'는 아님)
 RE_TIME_ASK = re.compile(r"((지금|현재)\s*(몇\s*시|시간|시각)|몇\s*시\s*(몇\s*분|야|예요|에요|이야|이에요|지|니|냐|인지|인가|일까|임|쯤\s*(됐|이)|됐)|"
                          r"몇\s*시\s*[?？]|몇\s*시\s*$|시간\s*(좀\s*)?(알려|말해)|시각\s*(좀\s*)?(알려|말해))")
 RE_DATE = re.compile(r"(며칠|몇\s*일|날짜|무슨\s*요일|무슨\s*날|오늘\s*요일|요일\s*(알려|뭐|어))")
 RE_NEWS = re.compile(r"(뉴스|헤드라인|주요\s*소식|오늘\s*소식)")
 RE_HELP = re.compile(r"(어떤\s*(일|거|것|기능)\S*\s*할\s*(수|줄)|뭐\s*할\s*줄|할\s*줄\s*아는|할\s*수\s*있는\s*(게|거|것|일|기능)|무슨\s*기능|뭐\s*(를)?\s*할\s*수|무엇을\s*할\s*수|뭘\s*할\s*수|도움말|기능\s*(이|을)?\s*(알려|뭐|목록)|명령어?\s*(알려|목록|뭐|뭐야))")
 
-# 시간을 말할 때 쓸 요일 이름
 _KO_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 
 
-# 체험 모드(어린이·여러 방문객)에서 읽지 않을 뉴스: 정치·선거·사건사고
 NEWS_SENSITIVE_RE = re.compile(
     r"(대통령|대통령실|국회|여당|야당|여야|민주당|국민의힘|정당|의원|장관|총리|선거|대선|총선|지선|탄핵|특검|검찰|기소|"
     r"구속|재판|판결|정치|국정|국감|내란|계엄|북한|전쟁|미사일|공습|사망|숨져|숨진|살해|살인|폭행|성폭|성범죄|마약|"
@@ -1264,8 +1125,6 @@ NEWS_SENSITIVE_RE = re.compile(
 
 
 def get_news(n=3):
-    """구글 뉴스 RSS(한국어, 키 불필요)에서 주요 헤드라인 몇 개를 가져와 음성용
-    문장으로 만듭니다. 체험 모드에서는 IT·과학 소식만, 정치·사건사고는 빼고 읽습니다. 실패 시 None."""
     if guest_on():
         for topic in ("TECHNOLOGY", "SCIENCE"):
             r = _get_news_from(f"https://news.google.com/rss/headlines/section/topic/{topic}?hl=ko&gl=KR&ceid=KR:ko",
@@ -1287,7 +1146,7 @@ def _get_news_from(url, n, safe=False):
         titles = []
         for item in root.findall(".//item"):
             t = (item.findtext("title") or "").strip()
-            t = t.split(" - ")[0].strip()   # "제목 - 언론사"에서 제목만
+            t = t.split(" - ")[0].strip()
             if safe and NEWS_SENSITIVE_RE.search(t):
                 continue
             if t:
@@ -1320,30 +1179,24 @@ def _weather_desc_ko(desc_en):
     return desc_en
 
 
-# --- 자비스 소개 멘트 (발표용: 매번 같은 내용으로 또렷하게) ---
-# 자유롭게 고쳐 쓰세요. {boss} = 저장된 보스 이름(없으면 '보스'), {ver} = 현재 버전.
 INTRO_SHORT = "저는 자비스입니다. {boss}님이 직접 만든 인공지능 비서예요. 말 한마디면 컴퓨터를 움직이고, 궁금한 건 바로 찾아 드리죠. 여러 나라 말도 할 줄 알아요."
 INTRO_FULL = (
     "안녕하세요, 저는 자비스입니다. {boss}님이 직접 만든 인공지능 비서예요. "
     "말 한마디로 프로그램을 열고, 날씨와 길 안내, 번역까지 해 드리고, 여러 나라 말로 대화할 수 있어요. "
     "잘 부탁드려요!"
 )
-INTRO_LONG = (   # "자세히 소개해줘"라고 하면 이 긴 버전
+INTRO_LONG = (
     "안녕하세요, 저는 자비스입니다. 아이언맨의 인공지능 비서에서 이름을 따 왔고, {boss}님이 직접 만들었어요. "
     "저는 말 한마디로 프로그램을 열고, 날씨와 길을 알려 드리고, 검색과 번역, 음악까지 챙깁니다. "
     "한국어는 물론 영어, 일본어, 중국어로도 대화하고, 번역한 말은 그 나라 목소리로 들려 드려요. "
     "주변이 시끄러워도 마이크 가까이에서 하는 말을 골라 들어요. "
     "지금은 버전 {ver}이고, 업데이트할 때마다 조금씩 더 똑똑해지고 있어요. 잘 부탁드립니다."
 )
-# "어떻게 만들었어?", "어떤 코딩 했어?", "무슨 언어로 만들었어?"
 RE_HOW_MADE = re.compile(r"(어떻게\s*(만들|만든|만들어|만드)|어떤\s*(종류의\s*)?(코딩|프로그래밍|언어)|무슨\s*(언어|프로그램)\S*\s*(로|으로)?\s*만들|"
                          r"뭘로\s*만들|뭐로\s*만들|무엇으로\s*만들|어떤\s*기술)")
 HOW_MADE = ("보스가 파이썬으로 직접 만들었어요. 들은 말은 음성 인식으로 글자로 바꾸고, "
             "명령이면 컴퓨터를 움직이고, 대화면 인공지능이 대답을 만들어요. "
             "제 목소리는 음성 합성으로 나오고, 화면은 HTML과 자바스크립트로 만들었어요.")
-# 보스(만든 사람) 소개: "보스 소개해줘", "나를 소개해줘", "우리 보스 누구야?"
-# 이름·학교 같은 개인 정보는 코드에 쓰지 않고 boss_info.json(이 컴퓨터에만 둠, 깃허브에 안 올림)에서 읽음.
-# 형식은 boss_info.example.json 참고. 파일이 없으면 개인 정보 없는 기본 소개를 씀.
 BOSS_INFO_FILE = os.path.join(BASE_DIR, "boss_info.json")
 
 
@@ -1360,21 +1213,18 @@ BOSS_INTRO = _BOSS_INFO.get("intro") or (
     "제 보스를 소개합니다! 코딩과 개발을 정말 좋아해서, 노트북 한 대로 저 자비스를 처음부터 직접 설계하고 만드셨죠. "
     "제가 가장 믿고 따르는 분이에요!"
 )
-# 체험 모드(발표장)용: 이름·닉네임 없이
-BOSS_INTRO_GUEST = (   # 이름·학교·학년·꿈 같은 개인 정보 없이
+BOSS_INTRO_GUEST = (
     "제 보스를 소개합니다! 코딩과 개발을 정말 좋아해서, 노트북 한 대로 저 자비스를 처음부터 직접 설계하고 만드셨죠. "
     "지금도 저를 계속 고치고 키워 주고 계세요. 제가 가장 믿고 따르는 분이에요!"
 )
 BOSS_PROFILE_GUEST = ("나를 만든 사람(보스) 정보: 코딩과 개발을 좋아하고, 자비스를 직접 만듦. "
-                      "이름·닉네임·나이·학교·학년·꿈·연락처·사는 곳 같은 개인 정보는 하나도 말하지 않고, 물으면 개인 정보라 말할 수 없다고 함. "
+                      "이름·닉네임·나이·소속·꿈·연락처·사는 곳 같은 개인 정보는 하나도 말하지 않고, 물으면 개인 정보라 말할 수 없다고 함. "
                       "그냥 '보스'라고 부름.")
-# 대화 AI도 보스에 대해 알고 대답하도록 (예: "내 꿈이 뭐라고 했지?")
 BOSS_PROFILE = _BOSS_INFO.get("profile") or "보스 정보: 코딩과 개발을 좋아함. 자비스를 직접 만든 사람."
-# 체험 모드에서 대답에 나오면 '보스'로 바꿀 이름들 (본명, 로마자·일본어·한자 표기 등)
 BOSS_SECRET_NAMES = tuple(n for n in _BOSS_INFO.get("secret_names", []) if n)
-# 체험 모드에서 대답에서 지울 소속(학교·학과·학년) 정규식, 그리고 방문객이 직접 말했는지 알아보는 정규식
 BOSS_AFFILIATION_PATTERNS = [re.compile(x) for x in _BOSS_INFO.get("affiliation_patterns", []) if x]
 BOSS_AFFILIATION_WORDS = re.compile(_BOSS_INFO["affiliation_words"]) if _BOSS_INFO.get("affiliation_words") else None
+BOSS_AFFILIATION_REPLACE = _BOSS_INFO.get("affiliation_replace", "")
 RE_BOSS_INTRO = re.compile(r"((보스|주인|나|날|저|제|내|만든\s*사람)\s*(를|을|에\s*대해|에\s*대해서)?\s*(좀\s*)?소개|"
                            r"(너의?|네|자비스의?)\s*(보스|주인)\S*\s*(는|가|이)?\s*(누구|소개)|"
                            r"(누가|누구가)\s*(너를|널|자비스를)\s*만들|(넌|너는|자비스는)\s*누가\s*만들|"
@@ -1387,12 +1237,10 @@ RE_GREET_ALL = re.compile(r"((여러분|사람들|친구들|선생님들|청중)
 
 
 MULTI_INTRO_BASE = "안녕하세요, 저는 {boss}님이 만든 인공지능 비서 자비스입니다."
-MULTI_INTRO_LANGS = ["en", "ja", "zh-CN", "es", "ru"]   # 한국어 다음에 이 순서로
+MULTI_INTRO_LANGS = ["en", "ja", "zh-CN", "es", "ru"]
 
 
 def multilang_intro(langs=None):
-    """한 문장 소개를 한국어 → 영어 → 일본어 → 중국어 → 스페인어 → 러시아어로, 각 나라 목소리로 이어서.
-    langs를 주면 그 언어들로만 (예: 일본어랑 중국어로)."""
     base = intro_text(MULTI_INTRO_BASE)
     results = {}
     lang_list = langs or MULTI_INTRO_LANGS
@@ -1412,7 +1260,6 @@ def multilang_intro(langs=None):
 
 
 def intro_text_guest(template):
-    """체험 모드용: 이름·닉네임 없이 '보스'"""
     t = template.replace("{boss}님이", "보스가").replace("{boss}님의", "보스의").replace("{boss}님", "보스")
     return t.format(boss="보스", ver=JARVIS_VERSION)
 
@@ -1423,7 +1270,6 @@ def intro_text(template):
     return template.format(boss=boss_name() or "보스", ver=JARVIS_VERSION)
 
 
-# --- 보스 이름 기억 (이 컴퓨터의 파일에 저장) ---
 PROFILE_FILE = os.path.join(BASE_DIR, "profile.json")
 
 
@@ -1443,9 +1289,7 @@ def set_boss_name(name):
         pass
 
 
-# --- 음악: 유튜브 뮤직 (스포티파이는 '스포티파이'라고 말할 때만) ---
 def _http_get_text(url, timeout=8, must_contain=None):
-    """웹 페이지 가져오기. 파이썬 연결이 끊기거나 다른 화면(동의 화면 등)이 오면 윈도우 기본 curl로 대신."""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "ko-KR,ko;q=0.9"}
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
@@ -1467,7 +1311,6 @@ def _http_get_text(url, timeout=8, must_contain=None):
 
 
 def youtube_first(query):
-    """유튜브 검색 첫 번째 영상 (영상 id, 제목). 못 찾으면 (None, None)."""
     html = _http_get_text("https://www.youtube.com/results?search_query=" + urllib.parse.quote(query),
                           must_contain='"videoRenderer"')
     m = re.search(r'"videoRenderer":\{"videoId":"([\w-]{11})".*?"title":\{"runs":\[\{"text":"(.*?)"', html)
@@ -1481,30 +1324,28 @@ def youtube_first(query):
 
 
 def handle_music(cmd):
-    if "스포티" in cmd:   # 스포티파이라고 분명히 말한 경우만 예전처럼
+    if "스포티" in cmd:
         song = re.sub(r"(스포티파이에서|스포티파이|스포티|노래|음악|틀어줘|틀어|열어줘|열어|켜줘|켜|좀|해줘)", " ", cmd)
         song = re.sub(r"\s+", " ", song).strip()
         webbrowser.open("https://open.spotify.com/search/" + urllib.parse.quote(song) if song else "https://open.spotify.com")
         return {"reply": f"스포티파이에서 {song} 찾아볼게요." if song else "스포티파이를 열게요.", "action": "music", "matched": song or "spotify"}
     vm = re.search(r"(틀어|들려|재생|플레이|play\b)", cmd, re.I)
-    if vm:   # '호로로 노래 틀어줘 아 대박 저거다' → 부탁 뒤의 말(옆 사람 말)은 버림
+    if vm:
         tail = re.match(r"\S*", cmd[vm.end():]).group(0)
         cmd = cmd[:vm.end()] + tail
-    cmd = re.sub(r"^\s*(야|자비스|저기|헤이|얘)\s*[^,]{0,8},\s*", "", cmd)   # '야 로봇, 노래 틀어줘' → '노래 틀어줘'
+    cmd = re.sub(r"^\s*(야|자비스|저기|헤이|얘)\s*[^,]{0,8},\s*", "", cmd)
     song = re.sub(r"(유튜브\s*뮤직에서|유튜브\s*뮤직으로|유튜브\s*뮤직|유튜브에서|노래\s*좀|노래|음악|플레이리스트|"
                   r"틀어\s*(줘|봐|줄래|주세요)?|들려\s*(줘|봐|줄래)?|재생해\s*줘|재생|플레이|열어\s*줘|열어|켜\s*줘|켜|듣고\s*싶어|좀|해줘|줘)", " ", cmd)
     song = re.sub(r"\s+", " ", song).strip(" ,.")
     if re.fullmatch(r"(도|하나|하나만|한\s*곡|아무\s*(거|노래|곡)?\s*(나|이나)?|신나는\s*거|요즘\s*거|뭐든|뭐라도)?", song):
-        song = ""   # '노래 하나 틀어봐' → 노래 이름이 없는 것과 같음
+        song = ""
     if not song:
-        # 노래 이름 없이 '노래 틀어줘'라고 하면 (부스 방문객이 자주 함) 요즘 인기 노래를 바로 틀기
         vid, title = youtube_first("요즘 인기 노래 플레이리스트")
         if vid:
             webbrowser.open(f"https://music.youtube.com/watch?v={vid}")
             return {"reply": "네, 요즘 인기 있는 노래를 틀어 드릴게요.", "action": "music", "matched": title}
         webbrowser.open("https://music.youtube.com")
         return {"reply": "유튜브 뮤직을 열게요.", "action": "music", "matched": "youtube music"}
-    # 가수 이름만 말하면 브이로그 같은 영상이 먼저 나오므로 '노래'를 붙여서 찾음
     query = song if re.search(r"(노래|음악|playlist|플레이리스트|ost|mv|커버|cover|lofi)", song, re.I) else song + " 노래"
     vid, title = youtube_first(query)
     if vid:
@@ -1517,7 +1358,6 @@ def handle_music(cmd):
     return {"reply": f"유튜브 뮤직에서 {song} 찾아볼게요.", "action": "music", "matched": song}
 
 
-# --- 윈도우 설정 화면 ("설정 열어줘", "와이파이 설정 열어줘", "블루투스 설정") ---
 SETTINGS_PAGES = [
     (r"(와이파이|wifi|wi-fi|인터넷|네트워크)", "ms-settings:network-wifi", "와이파이 설정"),
     (r"(블루투스|bluetooth)", "ms-settings:bluetooth", "블루투스 설정"),
@@ -1537,7 +1377,7 @@ def open_settings(cmd):
             break
     else:
         uri, name = "ms-settings:", "윈도우 설정"
-    if guest_on():   # 체험 모드에선 설정 화면을 열지 않음
+    if guest_on():
         return {"reply": "죄송해요, 보스. 그건 체험 모드에서는 할 수 없어요. 날씨나 음악, 번역, 자기소개 같은 걸 해 보세요!",
                 "action": "info", "matched": "guest_blocked"}
     try:
@@ -1547,8 +1387,6 @@ def open_settings(cmd):
     return {"reply": f"네, {name}{particle(name, '을', '를')} 열었어요.", "action": "program", "matched": uri}
 
 
-# --- 내 위치 (자비스 화면이 Windows 위치 서비스로 받아 서버에 알려줌) ---
-# 좌표는 이 컴퓨터의 파일에만 저장하고, 날씨 조회/지명 변환 때만 약 100m 단위로 줄여 보냅니다.
 LOCATION_FILE = os.path.join(BASE_DIR, "location_cache.json")
 _LOCATION = {"lat": None, "lon": None, "name": "", "query": "", "at": 0}
 _LOCATION_LOCK = threading.Lock()
@@ -1574,8 +1412,6 @@ def _save_location():
 
 
 def _reverse_geocode(lat, lon):
-    """좌표 → 한국어 지명 (OpenStreetMap Nominatim, 무료·키 불필요).
-    반환: (말할 이름 예 '이천시', 네이버 검색어 예 '이천시 창전동')"""
     url = (f"https://nominatim.openstreetmap.org/reverse?lat={lat:.3f}&lon={lon:.3f}"
            f"&format=json&accept-language=ko&zoom=16")
     req = urllib.request.Request(url, headers={"User-Agent": "jarvis-local/1.0 (personal voice assistant)"})
@@ -1586,13 +1422,12 @@ def _reverse_geocode(lat, lon):
     dong = a.get("quarter") or a.get("suburb") or a.get("neighbourhood") or a.get("village") or ""
     parts = []
     for x in (big, gu, dong):
-        if x and x not in parts:   # 같은 이름이 두 번 나오는 경우 제거 (예: 중리동 중리동)
+        if x and x not in parts:
             parts.append(x)
     return " ".join(parts[:2]), " ".join(parts)
 
 
 def set_location(lat, lon):
-    """화면에서 받은 위치를 저장합니다. 위치가 거의 그대로면 지명 변환을 다시 하지 않습니다."""
     with _LOCATION_LOCK:
         old_lat, old_lon, has_name = _LOCATION["lat"], _LOCATION["lon"], bool(_LOCATION["name"])
     if (old_lat is not None and has_name and abs(old_lat - lat) < 0.005 and abs(old_lon - lon) < 0.005):
@@ -1616,19 +1451,17 @@ def current_location():
         return dict(_LOCATION)
 
 
-# --- 길찾기 / 근처 찾기 (구글 지도, 무료·키 불필요) ---
 RE_ROUTE = re.compile(r"(어떻게\s*(가|갈|알까)|갈\s*(건데|껀데|거거든|거\s*같은데|려고|려는데|려면|예정)|어떻게\s*가|가는\s*(길|법|방법)|가려면|갈\s*수\s*있|길\s*(좀\s*)?(찾|안내|알려)|길찾기|경로)")
 RE_ROUTE_SPLIT = re.compile(r"\s*(까지|으로|에)?\s*(갈|가는|가려|가고|가야|어떻게|길\s*찾|길\s*안내|길찾기|길\s*(좀\s*)?알려|경로)")
 RE_NEARBY = re.compile(r"(근처|주변|가까운|가까이)")
 
 
 def _strip_ro(word):
-    """'롯데월드로'→'롯데월드', '서울로'→'서울' 이지만 '종로', '대학로'처럼 이름의 일부인 '로'는 남김"""
     if len(word) > 1 and word.endswith("로"):
         prev = word[-2]
         if "가" <= prev <= "힣":
             batchim = (ord(prev) - 0xAC00) % 28
-            if batchim in (0, 8):   # 받침 없음 또는 ㄹ 받침일 때만 조사 '로'
+            if batchim in (0, 8):
                 return word[:-1]
     return word
 
@@ -1636,10 +1469,10 @@ def _strip_ro(word):
 def route_destination(cmd):
     m = RE_ROUTE_SPLIT.search(cmd)
     dest = cmd[:m.start()] if m and m.start() > 0 else ""
-    if not dest:   # "길찾기 서울역" 처럼 목적지가 뒤에 오는 경우
+    if not dest:
         m2 = re.search(r"(길\s*찾기|길\s*안내|경로)\s*(해\s*줘)?\s*(.+)", cmd)
         dest = m2.group(3) if m2 else ""
-    dest = re.sub(r"^\S+\s*에서\s+(?=\S)", "", dest.strip())   # '학교에서 서울역까지' → 출발지는 지금 위치로
+    dest = re.sub(r"^\S+\s*에서\s+(?=\S)", "", dest.strip())
     dest = re.sub(r"^(여기서|지금|내일|오늘|이따|나중에|우리|저|나)\s+", "", dest.strip())
     dest = re.sub(r"\s*(차로|자동차로|운전해서|걸어서|도보로|자전거로|버스로|지하철로|대중교통으로)\s*", " ", dest)
     dest = re.sub(r"(까지|으로|에)$", "", dest.strip()).strip()
@@ -1657,7 +1490,6 @@ def route_mode(cmd):
 
 
 def _geocode(place):
-    """지명 → (lat, lon, 이름). 유명한 곳(부산, 서울역)은 그대로, 흔한 이름(OO마트)은 내 근처를 우선."""
     def search(extra):
         params = {"q": place, "format": "json", "accept-language": "ko", "countrycodes": "kr", "limit": "1"}
         params.update(extra)
@@ -1672,7 +1504,6 @@ def _geocode(place):
     if loc.get("lat") is not None:
         lat, lon = loc["lat"], loc["lon"]
         near = search({"viewbox": f"{lon-0.3},{lat+0.3},{lon+0.3},{lat-0.3}", "bounded": "1"})
-        # 근처 결과가 전국 최상위 결과만큼 중요하면(같은 이름의 가게 등) 근처 것을 씁니다.
         if near and (not best or float(near.get("importance", 0)) >= float(best.get("importance", 0)) - 0.05):
             best = near
     if not best:
@@ -1713,7 +1544,6 @@ def open_route(dest, cmd):
 
 
 def nearby_query(cmd):
-    # '근처 편의점 찾아가서 끌면은…'처럼 부탁(찾아/알려/어디) 뒤에 붙은 옆 사람 말은 버림
     vm = re.search(r"(찾아|알려|보여|어디|추천)", cmd)
     if vm:
         cmd = cmd[:vm.start()] + vm.group(0) + (re.match(r"\S*", cmd[vm.end():]).group(0) if vm.group(0) != "어디" else cmd[vm.end():])
@@ -1733,7 +1563,6 @@ def open_nearby(q):
     return f"{where} 근처 {q}, 지도에 찾아 띄웠어요."
 
 
-# 날씨를 말할 때 네이버 날씨 화면도 같이 띄울지 (False면 말로만 알려줌)
 WEATHER_SHOW_PAGE = True
 
 
@@ -1747,7 +1576,6 @@ def _wx_desc(entry):
 
 
 def _wx_advice(rain, tmax, tmin):
-    """날씨에 맞춰 자비스가 챙겨주는 한마디."""
     tips = []
     if rain >= 50:
         tips.append("우산 꼭 챙기세요.")
@@ -1763,8 +1591,6 @@ def _wx_advice(rain, tmax, tmin):
 
 
 def get_weather_naver(place, day=0, label=""):
-    """네이버 날씨(기상청 자료)에서 읽어 옴 - 화면에 띄우는 네이버 날씨와 숫자가 같음. 실패하면 None."""
-    # PC용 주소는 파이썬 요청을 막아서(403) 모바일 주소를 씀 (내용은 같은 기상청 자료)
     url = "https://m.search.naver.com/search.naver?query=" + urllib.parse.quote(f"{place} 날씨".strip())
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
@@ -1773,7 +1599,6 @@ def get_weather_naver(place, day=0, label=""):
     with urllib.request.urlopen(req, timeout=6) as resp:
         html = resp.read().decode("utf-8", errors="ignore")
     t = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).replace("&nbsp;", " ")
-    # 주간예보: "오늘 10.15. 오전 10% 맑음 오후 30% 구름많음 최저기온 8° 최고기온 21°"
     tag = "오늘" if day == 0 else "내일"
     wk = re.search(tag + r" \d+\.\d+\. (?:오전 )?(\d+)% (.+?) (?:오후 )?(\d+)% (.+?) 최저기온 (-?\d+)° 최고기온 (-?\d+)°", t)
     if not wk:
@@ -1799,9 +1624,6 @@ def get_weather_naver(place, day=0, label=""):
 
 
 def get_weather(city_ko="", day=0):
-    """날씨를 음성용 문장으로: 네이버 날씨(기상청 자료)를 먼저 쓰고, 안 되면 wttr.in으로.
-    day=0 오늘(지금 날씨 + 오늘 최고/최저/비 확률), day=1 내일 예보.
-    도시명을 안 주면 서버 IP 위치(지금 계신 곳) 기준입니다. 실패 시 None."""
     try:
         loc = current_location()
         place = city_ko.strip() or loc.get("query") or loc.get("name") or ""
@@ -1818,7 +1640,7 @@ def get_weather(city_ko="", day=0):
         if not city:
             loc = current_location()
             if loc.get("lat") is not None:
-                target = f"{loc['lat']:.2f},{loc['lon']:.2f}"   # 내 위치 좌표 (약 1km 단위)
+                target = f"{loc['lat']:.2f},{loc['lon']:.2f}"
                 label = loc.get("name") or ""
         url = f"https://wttr.in/{urllib.parse.quote(target)}?format=j1&lang=ko"
         req = urllib.request.Request(url, headers={"User-Agent": "jarvis-local/1.0"})
@@ -1852,8 +1674,6 @@ def get_weather(city_ko="", day=0):
         return None
 
 
-# --- 번역 (구글 번역 무료 엔드포인트, 키 불필요) ---
-# (말 패턴, 코드, 한국어 이름, 영어 이름, 그 나라 목소리) - 위에서부터 먼저 맞는 것 (인도네시아 > 인도)
 LANGS = [
     (r"인도네시아(?:어|말)?", "id", "인도네시아어", "Indonesian", "id-ID-ArdiNeural"),
     (r"영어|영국말|미국말", "en", "영어", "English", None),
@@ -1876,7 +1696,6 @@ EDGE_VOICE_OTHER.update({code: v for _, code, _, _, v in LANGS if v})
 
 
 def find_langs(text):
-    """문장에 나온 언어들을 말한 순서대로 (코드 목록)."""
     found = []
     for pat, code, _, _, _ in LANGS:
         m = re.search(pat, text)
@@ -1886,7 +1705,6 @@ def find_langs(text):
 
 
 def find_lang(text):
-    """문장에서 언어 이름을 찾아 (코드, 한국어 이름). 없으면 (None, None)."""
     for pat, code, kname, _, _ in LANGS:
         if re.search(pat, text):
             return code, kname
@@ -1908,7 +1726,6 @@ _RR_FIN = ["", "k", "k", "k", "n", "n", "n", "t", "l", "k", "m", "l", "l", "l", 
 
 
 def romanize_ko(word):
-    """한글 이름 → 로마자 발음 (예: 민수 → Minsu). 번역할 때 이름을 단어로 오역하지 않게."""
     out = []
     for ch in word:
         code = ord(ch) - 0xAC00
@@ -1923,7 +1740,6 @@ _NAME_FORMS = {}
 
 
 def name_in(name, target):
-    """보스 이름을 그 언어에서 쓸 형태로 (영어 등: 로마자, 일본어: 가타카나, 중국어: 한자). 한 번 구하면 기억."""
     roman = romanize_ko(name)
     if target not in ("ja", "zh-CN"):
         return roman
@@ -1943,7 +1759,6 @@ def name_in(name, target):
 
 
 def _translate_groq(text, target):
-    """Groq AI로 번역 (자연스럽고 빠름, 0.3초 안팎). 실패하면 None."""
     lang = _LANG_NAMES_EN.get(target, "English")
     out = _groq_request([
         {"role": "system", "content": f"You are a translator. Translate the user's text into natural {lang}. "
@@ -1977,7 +1792,6 @@ def _translate_mymemory(text, target):
 
 
 def translate_text(text, target="en"):
-    """번역: Groq AI → 구글 무료 → MyMemory 무료 순서로 시도 (하나가 막혀도 계속 동작)."""
     for fn in (_translate_groq, _translate_google, _translate_mymemory):
         try:
             out = fn(text, target)
@@ -1988,7 +1802,6 @@ def translate_text(text, target="en"):
     return None
 
 
-# --- 대답 언어 모드: "이제부터 영어로만 말해" → 모든 대답을 그 언어 + 그 나라 목소리로 ---
 REPLY_LANG_FILE = os.path.join(BASE_DIR, "reply_lang.json")
 _REPLY_LANG = {"code": "ko", "name": "한국어"}
 _LANG_WORDS = "(" + _LANG_ALT + ")"
@@ -2016,7 +1829,6 @@ def reply_lang():
     return _REPLY_LANG["code"]
 
 
-# --- 말 속도(배속): '1.5배속으로 말해', '더 빨리 말해', '천천히 말해', '말 속도 원래대로' ---
 TTS_RATE_FILE = os.path.join(BASE_DIR, "tts_rate.json")
 RE_SPEED = re.compile(r"(\d(?:\.\d+)?)\s*배\s*속|(말|말하는|목소리|대답)\s*(의\s*)?(속도|빠르기)|"
                       r"(빨리|빠르게|천천히|느리게|느릿느릿)\s*(좀\s*)?(말해|말하|얘기해|얘기하|대답해|읽어)")
@@ -2050,7 +1862,6 @@ def _load_tts_rate():
 
 
 def handle_speed(cmd):
-    """말 속도 바꾸기. 해당 없으면 None."""
     if not RE_SPEED.search(cmd):
         return None
     if guest_on():
@@ -2065,7 +1876,7 @@ def handle_speed(cmd):
         pct = cur + 15
     elif re.search(r"(천천히|느리게|느린|느릿)", cmd):
         pct = cur - 15
-    else:   # '말 속도 몇이야?'
+    else:
         return {"reply": f"지금은 {1 + cur / 100:.2f}배속으로 말하고 있어요. '1.5배속으로 말해'처럼 바꿀 수 있어요.".replace("0배속", "배속"),
                 "action": "info", "matched": "speed"}
     pct = set_tts_rate(pct)
@@ -2083,14 +1894,11 @@ def set_reply_lang(code, name):
         pass
 
 
-_LAST_REPLY = {"text": ""}   # "한국어로 다시 말해줘" 할 때 다시 말해 줄 직전 대답
+_LAST_REPLY = {"text": ""}
 
 
 def try_lang_mode(cmd):
-    """'이제부터 영어로만 말해', '다시 한국어로 대답해', 'speak Korean' → 대답 언어 바꾸기.
-    ('사랑해를 영어로 말해줘' 같은 번역 부탁은 건드리지 않음)"""
     code = name = None
-    # 다른 언어 모드일 때 '한국어'가 들어간 짧은 말("다들 지금 다 한국어로 봐라"처럼 잘못 들려도)은 한국어로 돌아오라는 뜻
     if reply_lang() != "ko" and len(cmd) <= 25 and re.search(r"(한국어|한국말|korean)", cmd, re.I) \
             and not re.search(r"(번역|뭐야|뭐라고|어떻게\s*말|무슨\s*뜻|뜻이)", cmd):
         set_reply_lang("ko", "한국어")
@@ -2099,7 +1907,6 @@ def try_lang_mode(cmd):
             again = translate_text(_LAST_REPLY["text"], "ko") or ""
         return {"reply": "네, 보스. 다시 한국어로 말씀드릴게요." + (" " + again if again else ""),
                 "action": "info", "matched": "lang_mode"}
-    # "지금부터 한국어", "이제부터 영어 모드" ('로' 없이 말한 경우)
     m0 = re.search(r"(지금부터|이제부터|앞으로는?|다시)\s*" + _LANG_WORDS + r"(?:로|으로)?\s*(?:만|모드)?\s*(?:해|해줘|하자|말해|말해줘|대답해|대답해줘)?[.!?\s]*$", cmd)
     if m0 and "번역" not in cmd:
         code, name = find_lang(m0.group(2))
@@ -2108,7 +1915,6 @@ def try_lang_mode(cmd):
         else:
             m0 = None
     m = None if m0 else RE_LANG_MODE.search(cmd)
-    # "영어로 말해볼래?", "일본어로 말할 수 있어?" = 할 수 있는지 물어본 것 → 모드는 그대로, 그 언어로 한마디
     trial = re.search(r"(말해\s*볼래|말해\s*봐|말할\s*수\s*있|할\s*수\s*있어|가능해|해\s*볼래)", cmd) and \
         not re.search(r"(이제부터|지금부터|앞으로|계속|만\s*(말|대답)|모드|바꿔)", cmd)
     if m and trial:
@@ -2123,7 +1929,6 @@ def try_lang_mode(cmd):
     if m:
         prefix = re.sub(r"(이제부터|지금부터|앞으로는?|이제는?|계속|다시|그냥|자비스|헤이|네|응|아니|아니야|너|넌|좀|"
                         r"[가-힣]?[비미]스|jarvis|[,.!?\s])", "", m.group(1), flags=re.I)
-        # 앞에 '~를'처럼 번역할 말이 붙어 있으면 번역 부탁 (짧은 군말은 '자비스'를 잘못 들은 것으로 봄)
         if prefix and not m.group(4) and (re.search(r"(을|를)$", prefix) or len(prefix) > 4) \
                 and find_lang(m.group(2))[0] != "ko":
             return None
@@ -2153,7 +1958,6 @@ def try_lang_mode(cmd):
 
 
 def handle_translate(cmd):
-    """'사랑해를 영어로 번역해줘', '만나서 반가워 일본어로 뭐야' → 번역해서 그 나라 목소리로 읽어 줌"""
     target, tname = find_lang(cmd)
     if not target:
         target, tname = "en", "영어"
@@ -2161,10 +1965,9 @@ def handle_translate(cmd):
     text = re.sub(r"\s*(을|를)?\s*" + lang_words + r"\s*(로|으로)?\s*(는|번역\S*|뭐\S*|어떻게\s*\S*|말해\S*|알려\S*|해\s*줘|좀)*.*$", "", cmd)
     text = re.sub(r"\s*(을|를)?\s*번역\S*.*$", "", text)
     text = re.sub(r"^(이거|이걸|이 말|다음 말|번역해\s*줘)\s*", "", text).strip(" ,.'\"")
-    if not text:   # 언어를 앞에 말한 경우: "영어로 오늘 하루 어떠세요 번역해줘"
+    if not text:
         text = re.sub(r"^\s*" + lang_words + r"\s*(로|으로)\s*(는)?\s*", "", cmd)
         text = re.sub(r"\s*(을|를)?\s*(번역\S*|말해\S*|해\s*줘|알려\S*|뭐\S*|어떻게\s*\S*)(\s*\S*)?$", "", text).strip(" ,.'\"")
-    # 받아쓰기에서 '를'이 '가/라'처럼 들린 경우: '안녕하세요가' → '안녕하세요', '사랑해라' → '사랑해'
     text = re.sub(r"(?<=[요다해워와야지까니])(가|는|라|은|이)$", "", text).strip()
     if not text:
         return {"reply": "번역할 말을 함께 말씀해 주세요. 예를 들면, 사랑해를 영어로 번역해줘.", "action": "info", "matched": "translate"}
@@ -2175,7 +1978,6 @@ def handle_translate(cmd):
             "speak_parts": [{"text": f"{text}, {tname}로는", "lang": "ko"}, {"text": tr, "lang": target}]}
 
 
-# --- 메모 / 할 일 (로컬 파일에 저장) ---
 NOTES_FILE = os.path.join(BASE_DIR, "jarvis_notes.txt")
 RE_NOTE_CLEAR = re.compile(r"메모\s*(전부|다|모두)?\s*(지워|삭제|비워)")
 RE_NOTE_READ = re.compile(r"(메모|할\s*일)\s*(뭐|읽|보여|알려|목록|있)")
@@ -2207,10 +2009,8 @@ def clear_notes():
         return False
 
 
-# --- 환율·주가: 보스 요청으로 기능에서 뺐음 (False면 물어봐도 "빼 두었다"고만 대답) ---
 FINANCE_ENABLED = False
 
-# --- 환율 (open.er-api.com 무료, 키 불필요) ---
 RE_FX = re.compile(r"환율")
 _FX_MAP = {"달러": ("USD", "달러"), "미국": ("USD", "달러"), "엔화": ("JPY", "엔"), "엔": ("JPY", "엔"),
            "유로": ("EUR", "유로"), "위안": ("CNY", "위안"), "파운드": ("GBP", "파운드")}
@@ -2223,7 +2023,6 @@ def _naver_json(url):
 
 
 def get_fx(code, name):
-    # 1) 네이버 증권 실시간 환율 (한국에서 보는 숫자와 같음)
     try:
         r = _naver_json(f"https://m.stock.naver.com/front-api/marketIndex/productDetail?category=exchange&reutersCode=FX_{code}KRW")
         price = float(str(r["result"]["closePrice"]).replace(",", ""))
@@ -2232,7 +2031,6 @@ def get_fx(code, name):
         return f"현재 1{name}는 약 {round(price):,}원이에요."
     except Exception:
         pass
-    # 2) 안 되면 하루 한 번 바뀌는 무료 환율
     try:
         url = f"https://open.er-api.com/v6/latest/{code}"
         req = urllib.request.Request(url, headers={"User-Agent": "jarvis-local/1.0"})
@@ -2248,7 +2046,6 @@ def get_fx(code, name):
         return None
 
 
-# --- 주가 (야후 파이낸스, 키 불필요, 자주 찾는 종목만 이름→티커 매핑) ---
 RE_STOCK = re.compile(r"(주가|주식|시세)")
 _TICKERS = {"애플": "AAPL", "테슬라": "TSLA", "엔비디아": "NVDA", "마이크로소프트": "MSFT",
             "구글": "GOOGL", "아마존": "AMZN", "메타": "META", "넷플릭스": "NFLX",
@@ -2259,7 +2056,6 @@ _TICKERS = {"애플": "AAPL", "테슬라": "TSLA", "엔비디아": "NVDA", "마�
 
 def get_stock(name, ticker):
     name = re.sub(r"^sk", "SK", name)
-    # 한국 주식은 네이버 증권 (장이 끝났으면 오늘 종가)
     if ticker.endswith((".KS", ".KQ")):
         try:
             d = _naver_json(f"https://m.stock.naver.com/api/stock/{ticker.split('.')[0]}/basic")
@@ -2292,10 +2088,8 @@ def get_stock(name, ticker):
         return None
 
 
-# --- 음악 재생 (스포티파이 검색 열기) ---
 RE_MUSIC = re.compile(r"(틀어|재생|노래|음악|스포티|플레이|플레이리스트)")
 
-# --- 위키백과 (한국어 요약, 키 불필요) ---
 RE_WIKI = re.compile(r"(위키|위키백과|에\s*대해\s*(설명|알려)|에\s*대해서|뜻이?\s*뭐|무슨\s*뜻|누구야|누구니)")
 
 
@@ -2311,14 +2105,13 @@ def get_wikipedia(query):
         extract = (data.get("extract") or "").strip()
         if not extract or data.get("type") == "disambiguation" or re.search(r"(다음을\s*가리킨다|다음과\s*같은\s*뜻)", extract):
             return None
-        extract = re.sub(r"\s*[(（][^()（）]*[)）]", "", extract)   # '인공지능(영어: artificial intelligence, AI)은' → '인공지능은'
+        extract = re.sub(r"\s*[(（][^()（）]*[)）]", "", extract)
         sents = re.split(r"(?<=[.!?。])\s+", extract)
         return " ".join(sents[:2])
     except Exception:
         return None
 
 
-# --- 계산기 (사칙연산) ---
 RE_CALC = re.compile(r"(-?\d[\d,\.]*)\s*(더하기|플러스|빼기|마이너스|곱하기|곱하면|나누기|\+|\-|\*|x|X|÷|/)\s*(\d[\d,\.]*)")
 
 
@@ -2328,7 +2121,6 @@ _CALC_OP = r"(더하기|플러스|빼기|마이너스|곱하기|곱하면|나누
 
 
 def _ko_num(word):
-    """'삼' → 3, '이십오' → 25, '일이'처럼 뒤에 조사가 붙으면 앞부분만. (값, 쓴 글자 수) 또는 None"""
     m = _KO_NUM_RE.match(word or "")
     if not m or not m.group(0):
         return None
@@ -2342,7 +2134,6 @@ def _ko_num(word):
 
 
 def _ko_calc_numbers(cmd):
-    """'삼 더하기 일이 뭐야' → '3 더하기 1이 뭐야' (계산하는 말 바로 앞뒤의 한글 숫자만 바꿈)"""
     def left(mt):
         w = mt.group(1)
         r = _ko_num(w)
@@ -2351,7 +2142,7 @@ def _ko_calc_numbers(cmd):
         w = mt.group(2)
         r = _ko_num(w)
         return (mt.group(1) + " " + str(r[0]) + w[r[1]:]) if r else mt.group(0)
-    cmd = re.sub(r"(?<![가-힣])상(?=\s*" + _CALC_OP + ")", "삼", cmd)   # 받아쓰기가 '삼'을 '상'으로 적는 경우
+    cmd = re.sub(r"(?<![가-힣])상(?=\s*" + _CALC_OP + ")", "삼", cmd)
     cmd = re.sub(r"(?<![가-힣])([일이삼사오육륙칠팔구십백천]+)\s*" + _CALC_OP, left, cmd)
     cmd = re.sub(_CALC_OP + r"\s*([일이삼사오육륙칠팔구십백천]+)", right, cmd)
     return cmd
@@ -2383,7 +2174,6 @@ def do_calc(cmd):
     return f"{m.group(1)} {op_word} {b_txt}{particle(b_txt, '은', '는')} {res}입니다."
 
 
-# --- 재미: 동전 / 주사위 ---
 RE_COIN = re.compile(r"(동전\s*(던져|던지기|던질|튕겨|굴려)|앞\s*뒤)")
 RE_DICE = re.compile(r"(주사위)")
 _KO_COUNT = {"한": 1, "하나": 1, "두": 2, "둘": 2, "세": 3, "셋": 3, "1": 1, "2": 2, "3": 3}
@@ -2395,7 +2185,6 @@ RE_FUN_AGAIN = re.compile(r"^\s*((한|하나|두|둘|세|셋|[123])\s*개\s*(로
 
 
 def fun_again(cmd):
-    """'주사위 굴려줘' 다음에 '2개 굴려줘', '다시 돌려줘'처럼 짧게 이어 말한 것 (1분 안)"""
     k = _LAST_FUN["kind"]
     if not k or time.time() - _LAST_FUN["at"] > 60 or not RE_FUN_AGAIN.search(cmd):
         return None
@@ -2411,7 +2200,6 @@ def _remember_fun(kind, cmd):
 
 
 def roll_dice(cmd):
-    """주사위 1~3개. 화면 카드(anim: dice)가 실제로 굴러간 뒤 결과를 말함"""
     m = re.search(r"(한|하나|두|둘|세|셋|[123])\s*(개|번)?\s*(의\s*)?주사위|(주사위\s*(를\s*)?|^\s*)(한|하나|두|둘|세|셋|[123])\s*개", cmd)
     n = _KO_COUNT.get((m.group(1) or m.group(6)) if m else "1", 1)
     _remember_fun("dice", f"주사위 {n}개")
@@ -2437,14 +2225,12 @@ def flip_coin():
                      "say_before": "동전을 던집니다.", "say_after": f"동전의 {side}이 나왔습니다."}}
 
 
-# --- 개그: 대화 AI가 개그를 한 뒤 자비스가 웃음소리로 마무리 ---
 RE_JOKE = re.compile(r"(((아재\s*)?개그|농담|웃긴\s*(얘기|이야기|거|말|썰)|(웃기는|재밌는)\s*(얘기|이야기|말))\s*((을|를|좀|하나|한\s*(개|번|마디)|더)\s*)*"
                      r"(해|들려|말해|알려|쳐|읊어|부탁|ㄱ)|웃겨\s*(줘|봐|주세요|볼래)|tell\s+(me\s+)?a\s+joke)", re.I)
 _LAUGHS = {"ko": ["하하하하!", "푸하하하!", "으하하하!", "크크크, 하하하!"], "ja": ["あはははは！", "ははは！"],
            "en": ["Ha ha ha!", "Hahaha!"], "zh": ["哈哈哈！"]}
 
 
-# (질문, 정답, 풀이) 확실한 아재개그만. 한국어 말장난이라 다른 언어 모드에선 대화 AI가 대신 함
 JOKES = [
     ("세상에서 가장 가난한 왕은?", "최저임금", "임금이 왕이니까요."),
     ("왕이 넘어지면?", "킹콩", "킹이 콩 넘어졌으니까요."),
@@ -2474,7 +2260,7 @@ _JOKE_DECK = []
 
 def tell_joke():
     if not _JOKE_DECK:
-        _JOKE_DECK.extend(random.sample(JOKES, len(JOKES)))   # 다 할 때까지 같은 개그 안 함
+        _JOKE_DECK.extend(random.sample(JOKES, len(JOKES)))
     q, a, why = _JOKE_DECK.pop()
     after = f"정답은 {a}! {why}".strip()
     return {"reply": f"{q} {after}", "action": "info", "matched": "joke", "laugh": laugh_line(),
@@ -2487,7 +2273,6 @@ def laugh_line():
     return {"text": random.choice(_LAUGHS.get(code) or _LAUGHS["en"]), "lang": "ko-KR" if code == "ko" else code}
 
 
-# --- 룰렛 (돌림판) ---
 RE_ROULETTE = re.compile(r"(룰렛|롤렛|룰레트|돌림판|돌림\s*판|제비\s*뽑기|랜덤\s*(으로\s*)?(골라|뽑아|정해))")
 ROULETTE_PRESETS = [
     (re.compile(r"(점심|저녁|아침|야식|메뉴|뭐\s*먹|먹을\s*거|음식)"),
@@ -2500,7 +2285,6 @@ _ROULETTE_FILLER = re.compile(r"^(자비스(야)?|그럼|그러면|음+|어+|아
 
 
 def _roulette_options(cmd):
-    # '1부터 10까지 룰렛' → 숫자
     rng = re.search(r"(\d+)\s*(부터|에서|~|-)\s*(\d+)\s*(까지|중|사이)?", cmd)
     if rng:
         a, b = int(rng.group(1)), int(rng.group(3))
@@ -2520,7 +2304,7 @@ def _roulette_options(cmd):
         items = [x.strip(" .!?~") for x in re.split(r"[,/、]|\s+", seg)]
         items = [x for x in items if x and not _ROULETTE_FILLER.match(x) and len(x) <= 12]
         if any(rx.search(" ".join(items)) for rx, _ in ROULETTE_PRESETS) and len(items) <= 3:
-            continue   # '점심 메뉴 룰렛' → 칸 이름이 아니라 주제
+            continue
         if 2 <= len(items) <= 12:
             return items
     for rx, opts in ROULETTE_PRESETS:
@@ -2532,7 +2316,7 @@ def _roulette_options(cmd):
 def spin_roulette(cmd):
     _remember_fun("roulette", cmd)
     opts = _roulette_options(cmd)
-    if isinstance(opts, tuple):   # 칸이 너무 많으면 숫자 뽑기
+    if isinstance(opts, tuple):
         _, a, b = opts
         n = random.randint(a, b)
         res = f"{n}{particle(str(n), '이', '가')} 나왔습니다."
@@ -2546,12 +2330,10 @@ def spin_roulette(cmd):
             "card": {"icon": "", "title": "룰렛", "big": pick, "sub": "", "anim": "roulette", "options": opts,
                      "pick": i, "say_before": "룰렛을 돌립니다.", "say_after": res}}
 
-# --- 체험 놀이: 퀴즈 / 가위바위보 / 오늘의 운세 (AI 없이 바로 대답) ---
 RE_QUIZ = re.compile(r"((넌센스|상식|보안)?\s*퀴즈|문제\s*(하나\s*)?(내|낼|내봐|줘))")
 RE_RPS = re.compile(r"(가위\s*바위\s*보|묵\s*찌\s*빠|짱\s*깸\s*뽀)")
 RE_FORTUNE = re.compile(r"(운세|오늘의?\s*운\b|행운의?\s*(숫자|색|번호)|점\s*(좀\s*)?(봐|쳐))")
 
-# (문제, 정답으로 인정할 말들, 정답 말하기, 힌트)
 QUIZZES = [
     ("세상에서 가장 뜨거운 과일은 뭘까요?", ["천도복숭아", "천도"], "천도복숭아", "천 도나 되는 복숭아예요."),
     ("왕이 넘어지면 뭐가 될까요?", ["킹콩"], "킹콩", "영어로 왕은 킹이에요."),
@@ -2591,7 +2373,6 @@ _GAME = {"kind": None, "until": 0.0, "quiz": None, "tries": 0}
 _GAME_LOCK = threading.Lock()
 
 
-# 짧게 한 단어로 대답할 때 받아쓰기가 비슷한 말로 적는 것 ('바위' → '바비')
 _RPS_SOUNDALIKE = [
     ("바위", r"(바비|바이|바의|바우|바휘|바뷔|바귀|빠위|파위|마위|바이요|바비요|바위요|봐위|바외|빠이)"),
     ("가위", r"(까위|카위|가이|가비|가의|과위|가외|까이|가휘|가위요)"),
@@ -2611,7 +2392,7 @@ def _rps_choice(text):
     if len(found) == 1:
         return found[0]
     if found:
-        return None   # '가위 바위 보' 처럼 여러 개면 대답이 아님
+        return None
     core = re.sub(r"^(나는|난|저는|전|음|어|아)", "", re.sub(r"[!.?~,]", "", t))
     core = re.sub(r"(낼게|낼래|낼께|요|!)$", "", core)
     for name, rx in _RPS_SOUNDALIKE:
@@ -2634,7 +2415,6 @@ def _rps_play(mine):
 
 
 def game_start(cmd):
-    """'퀴즈 내줘', '가위바위보 하자', '오늘 운세 알려줘' → 바로 놀이 시작 (없으면 None)."""
     if RE_RPS.search(cmd):
         rest = cmd[RE_RPS.search(cmd).end():]
         mine = _rps_choice(rest) if rest.strip(" !.?~") else None
@@ -2661,13 +2441,11 @@ def game_start(cmd):
 
 
 def game_answer(cmd):
-    """퀴즈·가위바위보를 하는 중이면 그 대답으로 처리 (아니면 None → 평소처럼)."""
     with _GAME_LOCK:
         kind = _GAME["kind"] if time.time() < _GAME["until"] else None
         if not kind:
             _GAME["kind"] = None
             return None
-        # 다른 부탁('크롬 열어줘')이나 긴 말이면 놀이는 끝내고 평소처럼
         short = re.sub(r"[\s,.!?~]", "", cmd)
         other_cmd = re.search(r"(곱하기|더하기|빼기|나누기|주사위|동전|룰렛|돌림판|날씨|몇\s*시|운세|번역|영어로|일본어로|중국어로|노래|"
                               r"크롬|계산기|메모장|유튜브|엣지|자기\s*소개|뭐\s*할\s*수)", cmd)
@@ -2682,15 +2460,15 @@ def game_answer(cmd):
                         "card": {"icon": "✌️ ✊ ✋", "title": "가위바위보", "big": "가위 · 바위 · 보자기", "sub": "하나를 말해 주세요"}}
             if not mine:
                 return None
-            _GAME["until"] = time.time() + 30   # '한 판 더 할까요?' → 30초 동안은 바로 다음 판
+            _GAME["until"] = time.time() + 30
             return _rps_play(mine)
         if re.fullmatch(r"((헤이|hey)\s*)?(자비스|jarvis)(야|아)?", short, re.I):
-            return None   # 이름만 부른 건 퀴즈 대답이 아님 ('땡' 하지 않음)
+            return None
         q = _GAME["quiz"]
         low = short.lower()
         hit = any(a.lower().replace(" ", "") in low for a in q[1])
         if not hit and len(short) > 10 and not re.search(r"(힌트|몰라|모르겠|포기|정답)", short):
-            return None   # 대답이 아니라 옆 사람 말일 가능성이 커서 '땡' 하지 않음 (퀴즈는 그대로)
+            return None
         if hit:
             _GAME["kind"] = None
             return {"reply": f"정답이에요! {q[2]}. 대단해요, 보스! 한 문제 더 할까요?", "action": "info", "matched": "quiz",
@@ -2715,15 +2493,13 @@ def game_answer(cmd):
         return {"reply": "땡! 아쉬워요. 한 번 더 말해 보세요. '힌트'라고 하면 힌트를 드려요.", "action": "info", "matched": "quiz",
                 "card": {"icon": "❌", "title": "땡!", "big": q[0], "sub": f"들은 말: {cmd[:20]}"}}
 
-# --- 스크린샷 ---
 RE_SCREENSHOT = re.compile(r"(스크린\s*샷|화면\s*캡[처쳐]|캡[처쳐]\s*해)")
 
 
 def take_screenshot():
-    """PowerShell로 전체 화면을 캡처해 사진 폴더에 저장합니다. 성공 시 파일 경로, 실패 시 None."""
     try:
         path = os.path.join(KNOWN["Pictures"], f"jarvis_{int(time.time())}.png")
-        ps_path = path.replace("'", "''")   # PowerShell 문자열 안전 처리
+        ps_path = path.replace("'", "''")
         ps = (
             "Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
             "$s=[System.Windows.Forms.SystemInformation]::VirtualScreen;"
@@ -2739,8 +2515,6 @@ def take_screenshot():
         return None
 
 
-# 말투 정리: 앞의 호칭("헤이 자비스")·군말("나", "혹시")을 떼고,
-# "~줄 수 있어?", "~줄래?", "~주세요" 같은 부탁 표현을 "~줘"로 바꿔 규칙이 알아듣게 합니다.
 _WAKE_WORDS_RE = re.compile(
     r"^\s*((헤이|hey|하이)\s*)?(자비스|자비쓰|재비스|저\s*비스|차비스|jarvis)(?!\s*(가|는|를|의|도|랑|한테|에게|란|이란|라는|에\s*대해)(?![가-힣]))"
     r"\s*(야|아|님)?\s*[,.!~]*\s*", re.I)
@@ -2750,16 +2524,14 @@ _ACTION_RE = re.compile(r"(켜|열어|틀어|꺼|끄|끌|실행|검색|찾아|�
 
 
 def fix_mishears(t):
-    """받아쓰기가 자주 틀리는 말을 바로잡음 (명령 규칙과 대화 AI 둘 다에 적용)."""
     t = re.sub(r"(^|[\s,])(앱|엡|에치|엣찌|애지|엣쥐|에찌)\s*(찍혀|켜|껴|켜져)\s*줘", r"\1엣지 켜줘", t)
-    t = re.sub(r"^\s*(오프닝|오픈해|오쁜)\s+(?=(크롬|chrome|유튜브|youtube|엣지|edge|계산기|메모장|구글|네이버))", "오픈 ", t, flags=re.I)   # '오프닝 크롬 브라우저' → '오픈 크롬 브라우저'
-    t = re.sub(r"방귀\s*(띄워|뛰어|튀어)\s*(봐|줘)", r"방귀 뀌어\2", t)   # '방귀 띄워봐' → '방귀 뀌어봐'
-    # '조사 두 개 굴려줘' → '주사위 두 개 굴려줘'
+    t = re.sub(r"^\s*(오프닝|오픈해|오쁜)\s+(?=(크롬|chrome|유튜브|youtube|엣지|edge|계산기|메모장|구글|네이버))", "오픈 ", t, flags=re.I)
+    t = re.sub(r"방귀\s*(띄워|뛰어|튀어)\s*(봐|줘)", r"방귀 뀌어\2", t)
     t = re.sub(r"(^|[\s,])(조사위|조사|주사이|주사의|주사|주차위|추사위|두사위)(?=\s*((한|하나|두|세|[123])\s*개\s*)?(를\s*|좀\s*)?(굴려|굴리|던져|던지))",
                r"\1주사위", t)
     t = re.sub(r"(눌렛|놀렛|룰랫|롤랫|물렛|울렛)", "룰렛", t)
     t = re.sub(r"^(퀴드|퀴스|퀴쯔|퀴지)(?=\s*(내|해|하자|줘|$))", "퀴즈", t)
-    t = re.sub(r"(룰렛|돌림판)\s*(을\s*|좀\s*)?(눌러|불러|굴려|올려|들려|둘러)\s*(줘|봐|주세요)?", r"\1 돌려\4", t)   # '룰렛 눌러줘'
+    t = re.sub(r"(룰렛|돌림판)\s*(을\s*|좀\s*)?(눌러|불러|굴려|올려|들려|둘러)\s*(줘|봐|주세요)?", r"\1 돌려\4", t)
 
     t = re.sub(r"(꼬로로|보로로|뽀로노|포로로)(?=\s*(노래|동요|틀|영상|보여))", "뽀로로", t)
     t = re.sub(r"모럴\s*머신\s*(아라|나라|알아|아나)(?=[\s?？.!]|$)", "모럴 머신 알아?", t)
@@ -2769,7 +2541,6 @@ def fix_mishears(t):
 
 def normalize_command(text):
     t = (text or "").strip()
-    # 영어식 명령: 'open chrome', '오픈 크롬 브라우저', 'open youtube please', 'play music'
     t = re.sub(r"^\s*(please\s+|플리즈\s*)?(open|오픈|launch|런치|start|스타트)\s+(.+?)(\s+(please|플리즈))?\s*[.!?]*$", r"\3 열어줘", t, flags=re.I)
     t = re.sub(r"^\s*(play|플레이)\s+(some\s+|썸\s*)?(music|뮤직|song|송)\s*[.!?]*$", "노래 틀어줘", t, flags=re.I)
     t = re.sub(r"(크롬|chrome|엣지|edge)\s*(브라우저|browser)", r"\1", t, flags=re.I)
@@ -2778,16 +2549,14 @@ def normalize_command(text):
     t = re.sub(r"^(calculator)\s+열어줘$", "계산기 열어줘", t, flags=re.I)
     t = re.sub(r"^(notepad)\s+열어줘$", "메모장 열어줘", t, flags=re.I)
     t = fix_mishears(t)
-    # 받아쓰기가 '계산기'를 잘못 적는 경우 ('대상기 켜고 크롬 열어줘')
     t = re.sub(r"(대상기|개산기|게산기|계산끼|계산이|개산끼)(?=\s*(좀\s*)?(켜|열|띄|실행))", "계산기", t)
-    # 어르신 말투 '그 인터넷 하는 거 좀 켜줘' → 크롬 (인터넷 브라우저)
     t = re.sub(r"(그\s*)?인터넷\s*(하는\s*거|하는\s*것|창|브라우저)?\s*(좀\s*)?(켜|열어|띄워)", r"크롬 \4", t)
     t = _WAKE_WORDS_RE.sub("", t)
     for _ in range(2):
         t = _FILLER_RE.sub("", t)
     t = re.sub(r"^\s*(야|저기|저기요|여보세요|어이)\s*(로봇아?|너|자비스)?\s*[,!~.]*\s+(?=\S)", "", t)
     t = _POLITE_RE.sub("줘", t)
-    t = re.sub(r"(래씨|낼씨|날시)(?=$|[\s?.,!])", " 날씨", t)   # 받아쓰기가 '날씨'를 '래씨'로 적는 경우 ('부산래씨 어때')
+    t = re.sub(r"(래씨|낼씨|날시)(?=$|[\s?.,!])", " 날씨", t)
     return t.strip() or (text or "").strip()
 
 
@@ -2796,18 +2565,15 @@ def parse_command(raw_command):
     cmd = re.sub(r"[.,!?~…]+$", "", cmd).strip()
     cmd_lower = cmd.lower()
 
-    # 0.03) "자비스"/"헤이 자비스"만 부른 경우 → 대답만 (AI로 보내면 '서비스' 같은 걸 열 수 있음)
     if re.fullmatch(r"\s*((헤이|hey|하이|에이)\s*)?([가-힣]?[자재저차쟈]?\s*비[스쓰]|jarvis)\s*(야|아|님)?[\s,.!?~]*",
                     raw_command.strip(), re.I):
         return {"reply": "네, 보스. 말씀하세요.", "action": "info", "matched": "wake"}
 
-    # 0.035) 어느 폴더/파일인지 없이 "폴더 열어줘"만 → 어느 것인지 물어봄
     if re.fullmatch(r"(폴더|파일)\s*(좀\s*)?(열어|열기|켜|띄워)\S*", cmd) and \
             re.fullmatch(r"(폴더|파일)\s*(좀\s*)?(열어|열기|켜|띄워)\S*", re.sub(r"[.,!?~]+$", "", raw_command.strip())):
         return {"reply": "어떤 폴더를 열까요? 예를 들면 다운로드 폴더 열어줘, 처럼 말씀해 주세요.",
                 "action": "info", "matched": "folder_ask"}
 
-    # 5.7a) 목소리 구별 기준 조절 (장소가 바뀌어 보스 목소리를 자꾸 무시하거나, 남의 말에 반응할 때)
     if re.search(r"목소리\s*(인식|구별|인증)?\s*(기준|민감도|감도)", cmd):
         global SPEAKER_THRESHOLD
         if re.search(r"(낮춰|내려|줄여|낮게|약하게)", cmd):
@@ -2818,7 +2584,6 @@ def parse_command(raw_command):
         return {"reply": f"목소리 구별 기준은 지금 {SPEAKER_THRESHOLD}이에요. 보스 목소리를 자꾸 무시하면 낮춰 달라고, "
                          "다른 사람 말에 반응하면 올려 달라고 말씀해 주세요.", "action": "info", "matched": "spk_threshold"}
 
-    # 0.035) 발표 모드 (보통은 화면이 먼저 처리하지만, 표현이 달라 여기까지 오면 화면에 켜고 끄라고 알려 줌)
     if re.search(r"발표\s*모드", cmd) and guest_on():
         return {"reply": "발표 모드는 보스만 바꿀 수 있어요. 대신 퀴즈나 날씨 같은 걸 해 볼까요?", "action": "info", "matched": "present_guest"}
     if re.search(r"발표\s*모드", cmd):
@@ -2827,7 +2592,6 @@ def parse_command(raw_command):
                          "발표 모드를 켰어요. 이제 자비스라고 불러 주실 때만 대답할게요.",
                 "action": "present", "matched": "off" if off else "on"}
 
-    # 0.039) "어떤 언어 할 수 있어?" → 정확한 목록
     if re.search(r"(어떤|무슨|몇\s*개|몇\s*가지)\s*(나라\s*)?(언어|말)", cmd):
         order = ["en", "ja", "zh-CN", "es", "fr", "de", "ru", "it", "pt", "vi", "th", "id", "hi", "ar"]
         kn = {c: k for _, c, k, _, _ in LANGS}
@@ -2835,22 +2599,18 @@ def parse_command(raw_command):
         return {"reply": f"한국어를 포함해 {len(LANGS)}개 언어로 말할 수 있어요. {names}요. "
                          "'이제부터 영어로만 말해'처럼 말씀하시면 바꿀게요.", "action": "info", "matched": "languages"}
 
-    # 0.04) 대답 언어 바꾸기: "이제부터 영어로만 말해" / "다시 한국어로 말해"
     lm = try_lang_mode(cmd)
     if lm:
         return lm
 
-    # 0.04) "번역도 돼요?", "번역 할 수 있어?" → 할 수 있다고 안내 (앞말을 번역해 버리지 않게)
     if re.search(r"번역(도|은|이|기능)?\s*(돼|되|할\s*수|가능|해\s*줄\s*수|할\s*줄)", cmd) and not RE_TRANSLATE_LANG.search(cmd):
         return {"reply": "네, 15개 언어로 번역할 수 있어요. 예를 들면 사랑해를 영어로 말해줘, 처럼 말씀해 주세요.",
                 "action": "info", "matched": "translate_help"}
 
-    # 0.05) 번역: 다른 규칙보다 먼저 ("오늘 날씨 좋다 영어로 뭐야"가 날씨로 가지 않게)
     if RE_TRANSLATE.search(cmd) and not re.search(r"(검색|찾아)", cmd) \
             and (re.search(r"번역", cmd) or re.search(r"(로|으로)\s*(는|뭐|어떻게|말해|해\s*줘|알려|번역)", cmd)):
         return handle_translate(cmd)
 
-    # 0.0) 내 위치: "지금 내 위치 어디야", "여기 어디야"
     if re.search(r"((내|나의|현재|지금)\s*위치|여기\s*(가)?\s*어디|나\s*지금\s*어디|어디\s*있는지\s*알)", cmd) \
             and not RE_ROUTE.search(cmd):
         loc = current_location()
@@ -2860,7 +2620,6 @@ def parse_command(raw_command):
         return {"reply": "아직 노트북 위치를 못 받았어요. 윈도우 설정에서 위치 서비스를 켜고, 브라우저에서 위치 허용을 눌러 주세요.",
                 "action": "info", "matched": "location"}
 
-    # 0) 길찾기: "나 서울역 갈건데 어떻게 가?" → 지금 위치에서 서울역까지 지도 길찾기
     if RE_ROUTE.search(cmd):
         dest = route_destination(cmd)
         if dest and re.fullmatch(r"(우리|내|제|저희|너희|니|네)?\s*(집|학교|회사|직장|학원|교실|본가|고향|기숙사)", dest):
@@ -2870,13 +2629,11 @@ def parse_command(raw_command):
         if dest and len(dest) <= 30:
             return {"reply": open_route(dest, cmd), "action": "search", "matched": "route"}
 
-    # 0.1) 근처 찾기: "근처 맛집 찾아줘", "주변에 카페 어디 있어?" → 내 위치 중심 지도 검색
     if RE_NEARBY.search(cmd) and not re.search(r"(날씨|기온|미세먼지)", cmd):
         q = nearby_query(cmd)
         if q and len(q) <= 20:
             return {"reply": open_nearby(q), "action": "search", "matched": "nearby"}
 
-    # 1) 예약된 종료/재시작 취소
     if RE_CANCEL.search(cmd) and (len(cmd) <= 8 or re.search(r"(종료|재부팅|재시작|예약)", cmd)):
         if system_cancel_shutdown():
             return {"reply": "네, 예약된 종료를 취소했어요.", "action": "system", "matched": "cancel"}
@@ -2884,14 +2641,11 @@ def parse_command(raw_command):
 
     has_computer_word = bool(RE_COMPUTER.search(cmd))
 
-    # 2) 시스템 제어
-    # 컴퓨터 전원 끄기: "전원 꺼"처럼 '전원'이 분명히 있을 때만 실행합니다 (오작동 방지).
     if RE_POWER_OFF.search(cmd):
         if system_shutdown(30):
             return {"reply": "네, 30초 뒤에 컴퓨터 전원을 끕니다. 마음 바뀌시면 취소해줘라고 말해 주세요.", "action": "system", "matched": "shutdown"}
         return {"reply": "전원 종료 명령을 실행하지 못했습니다.", "action": "error", "matched": None}
 
-    # 재부팅 / 절전 / 화면 잠금
     if has_computer_word and RE_RESTART.search(cmd):
         if not ALLOW_COMPUTER_POWER:
             return {"reply": "컴퓨터 재시작은 안전을 위해 잠가 두었어요. 정말 필요하면 직접 해 주세요.", "action": "info", "matched": "power_locked"}
@@ -2910,15 +2664,12 @@ def parse_command(raw_command):
         return {"reply": "화면을 잠그지 못했습니다. Windows 환경이 아닐 수 있습니다.", "action": "error", "matched": None}
 
     if has_computer_word and RE_SHUTDOWN.search(cmd):
-        # "컴퓨터 종료"는 실수로 인식될 수 있어 바로 끄지 않고, 정확한 표현을 안내합니다.
         return {"reply": "컴퓨터를 정말 끄시려면 '전원 꺼'라고 말씀해 주세요. 실수로 꺼지면 안 되니까요.", "action": "info", "matched": "power_hint"}
 
-    # 2.9) 말 속도 (배속)
     sp = handle_speed(cmd)
     if sp:
         return sp
 
-    # 3) 볼륨 조절 (음소거는 "볼륨/소리"라는 단어 없이도 단독으로 말하는 경우가 많음)
     if RE_UNMUTE.search(cmd):
         if set_system_mute(False):
             return {"reply": "음소거를 풀었어요. 이제 잘 들리시죠?", "action": "system", "matched": "unmute"}
@@ -2939,8 +2690,6 @@ def parse_command(raw_command):
                 return {"reply": "소리 줄일게요.", "action": "system", "matched": "volume_down"}
             return {"reply": "볼륨을 조절하지 못했습니다. Windows 환경이 아닐 수 있습니다.", "action": "error", "matched": None}
 
-    # 4) 실행 중인 프로그램 종료 (강제 종료 대신, 앱 창에 닫기 요청을 보내
-    #    저장하지 않은 내용이 있으면 앱이 스스로 저장 여부를 물어볼 기회를 줍니다)
     if RE_CLOSE_APP.search(cmd):
         if not HAVE_PSUTIL:
             return {"reply": "psutil이 설치되어 있지 않아 프로그램을 종료할 수 없습니다. pip install psutil 로 설치해주세요.", "action": "error", "matched": None}
@@ -2955,7 +2704,6 @@ def parse_command(raw_command):
             return {"reply": f"{closed}{particle(closed,'을','를')} 끌게요.", "action": "close", "matched": closed}
         return {"reply": "실행 중인 프로그램 중에서 찾지 못했습니다.", "action": "error", "matched": None}
 
-    # 5) 직접 URL 이 포함된 경우
     m = URL_RE.search(cmd)
     if m:
         url = m.group(1)
@@ -2966,47 +2714,36 @@ def parse_command(raw_command):
 
     has_search_intent = bool(re.search(r"검색|찾아(?!\s*뵙|\s*뵈|\s*가|\s*와|\s*오)", cmd))
 
-    # 5.1) 음악: "아이유 노래 틀어줘", "유튜브 뮤직에서 뉴진스 틀어줘" → 유튜브 뮤직에서 바로 재생
     if re.search(r"(유튜브\s*뮤직|노래|음악|플레이리스트)", cmd) and re.search(r"(틀어|재생|들려|플레이|켜|열어|듣고\s*싶)", cmd) \
             and not has_search_intent and "폴더" not in cmd:
         return handle_music(cmd)
 
-    # 5.2) 윈도우 설정 화면 (프로그램 이름 찾기보다 먼저: '설정'이라는 앱 이름이 없어서)
     if RE_SETTINGS.search(cmd) and "폴더" not in cmd:
         return open_settings(cmd)
 
-    # 5.25) 타이머는 화면이 직접 맞추는데, 숫자를 못 알아들어 여기까지 왔으면 솔직하게 안내
     if re.search(r"타이머|알람", cmd):
-        # 숫자가 있는 타이머는 화면이 바로 맞추므로 여기까지 오면 못 맞춘 것 (AI가 '맞췄다'고 지어내지 않게)
         return {"reply": "타이머는 '5분 타이머'처럼 숫자와 함께 말씀해 주시면 맞춰 드릴게요.",
                 "action": "info", "matched": "timer_hint"}
 
-    # 5.3) 이름으로 파일 열기: "바탕화면에 있는 해킹이라는 ppt 틀어줘", "다운로드에서 숙제 pdf 열어줘"
     fi = handle_file_open(cmd)
     if not fi and "폴더" in cmd and _NESTED_RE.search(raw_command):
-        # "자비스 폴더에서 포스터 파일 열어줘": 맨 앞 '자비스'를 부르는 말로 떼어 냈으면 원래 문장으로 다시
         fi = handle_file_open(re.sub(r"[.,!?~]+$", "", raw_command.strip()))
     if fi:
         return fi
 
-    # 5.4) 이름으로 폴더 열기: "파일 탐색기에서 자비스 폴더 열어줘", "다운로드에서 숙제 폴더 열어줘"
     if "폴더" in cmd:
         fo = handle_folder_open(cmd)
         if fo:
             return fo
-        # "자비스 폴더 열어줘": 앞의 '자비스'를 부르는 말로 떼어 내서 이름이 비었으면, 원래 문장으로 다시
         mf = RE_FOLDER_OPEN.search(cmd)
         if mf and not mf.group(1).strip():
             fo = handle_folder_open(re.sub(r"[.,!?~]+$", "", raw_command.strip()))
             if fo:
                 return fo
 
-    # 5.5) 날씨: 날씨를 가져와 음성으로 말하고, 네이버 날씨 화면도 같이 띄웁니다.
-    #      ("검색"이면 검색으로, 못 가져오면 날씨 화면만 띄움)
     weather_chat = re.search(r"(그치|그렇지|맞지|않냐|잖아)\s*\??$", cmd) and \
         not re.search(r"(알려|어때|어떄|어떻|몇\s*도|뭐야|궁금|는\?|나\?)", cmd)
     if RE_WEATHER.search(cmd) and weather_chat:
-        # '오늘 날씨 진짜 덥다 그치?'는 친구에게 하는 말일 수 있어서 명령으로 보지 않음 (대화 AI가 판단)
         return {"reply": "음, 잘 못 알아들었어요. 다시 한 번 말해 줄래요?", "action": "none", "matched": None}
     if RE_WEATHER.search(cmd) and not has_search_intent and not weather_chat:
         day = 1 if "내일" in cmd else 0
@@ -3019,7 +2756,7 @@ def parse_command(raw_command):
         toks = [t for t in toks if not re.fullmatch(r"(그러면|그럼|그리고|그래서|자|음|어|아|혹시|저기|나|저|우리|여기|거기)", t)]
         city = " ".join(t for t in toks if t).strip()
         if len(city) < 2 or len(city) > 6:
-            city = ""   # 도시명이 애매하면 현재 위치(서버 IP) 기준
+            city = ""
         reply = get_weather(city, day)
         if WEATHER_SHOW_PAGE:
             place = city or current_location().get("query") or ""
@@ -3031,7 +2768,6 @@ def parse_command(raw_command):
             return {"reply": "날씨 정보를 직접 가져오진 못했지만, 날씨 화면을 띄워 드렸어요.",
                     "action": "website", "matched": "weather"}
 
-    # 5.6) 시간 / 날짜 / 요일 (AI는 실시간 시계를 모르므로 서버 시계로 정확히 답합니다)
     if RE_TIME.search(cmd) and RE_TIME_ASK.search(cmd) and not RE_DATE.search(cmd) \
             and not re.search(r"(걸려|걸리|걸릴|걸립|소요|얼마나|어느\s*정도)", cmd):
         now = datetime.datetime.now()
@@ -3044,19 +2780,15 @@ def parse_command(raw_command):
         return {"reply": f"오늘은 {now.year}년 {now.month}월 {now.day}일 {wd}요일이에요.",
                 "action": "info", "matched": "date"}
 
-    # 5.7) 뉴스 헤드라인 읽어주기
-    # '뉴스, 계산기 좀 켜봐'('야 자비스'를 '뉴스'로 잘못 받아씀)처럼 다른 걸 켜/열라는 말이 같이 있으면 뉴스가 아님
     news_other_action = re.search(r"(켜|열어|띄워|실행|틀어)", cmd) and not re.search(r"뉴스\s*(좀\s*)?(틀어|켜|열어|틀|보여)", cmd)
     if RE_NEWS.search(cmd) and not has_search_intent and not news_other_action:
         reply = get_news()
         if reply:
             return {"reply": reply, "action": "info", "matched": "news"}
 
-    # 5.7a2) 어떻게 만들었는지 (부스에서 자주 묻는 말)
     if RE_HOW_MADE.search(cmd):
         return {"reply": HOW_MADE, "action": "info", "matched": "how_made"}
 
-    # 5.7b) 자비스 소개 / 보스 소개 / 청중 인사 (발표용 고정 멘트)
     if RE_BOSS_INTRO.search(cmd):
         return {"reply": BOSS_INTRO_GUEST if guest_on() else BOSS_INTRO, "action": "info", "matched": "boss_intro"}
     if RE_INTRO_FULL.search(cmd):
@@ -3064,7 +2796,7 @@ def parse_command(raw_command):
             return multilang_intro()
         tpl = INTRO_LONG if re.search(r"(자세히|길게|자세하게)", cmd) else INTRO_FULL
         codes = find_langs(cmd)
-        if len([c for c in codes if c != "ko"]) >= 2:   # "일본어랑 중국어로 자기소개 해줘"
+        if len([c for c in codes if c != "ko"]) >= 2:
             return multilang_intro([c for c in codes if c != "ko"])
         code, kname = find_lang(cmd)
         if code and code != "ko":
@@ -3080,7 +2812,6 @@ def parse_command(raw_command):
     if RE_GREET_ALL.search(cmd):
         return {"reply": intro_text(INTRO_GREET), "action": "info", "matched": "greet"}
 
-    # 5.7c) 이름 기억: "내 이름은 OO야" / "내 이름 뭐야"
     m_name = re.search(r"(내|제)\s*(진짜\s*|원래\s*|본\s*)?(이름|닉네임|별명)은\s*([가-힣A-Za-z]{1,10}?)\s*(이야|야|입니다|이에요|예요|이라고|라고)\b", cmd)
     if m_name:
         set_boss_name(m_name.group(4))
@@ -3091,12 +2822,10 @@ def parse_command(raw_command):
                  "아직 이름을 못 들었어요. '내 이름은 OO야'라고 알려주시면 기억할게요.")
         return {"reply": reply, "action": "info", "matched": "name"}
 
-    # 5.7d) 미니 자비스: 브라우저 규칙상 말로는 못 여니 솔직하게 안내
     if re.search(r"미니\s*자비스", cmd):
         return {"reply": "미니 자비스는 브라우저 규칙상 제가 말로 열 수는 없어요. 화면 오른쪽 아래 미니 자비스 버튼을 한 번 눌러 주세요.",
                 "action": "info", "matched": "mini"}
 
-    # 5.8) 도움말 (할 수 있는 일 안내)
     if RE_HELP.search(cmd):
         if guest_on():
             return {"reply": ("자기소개, 날씨와 시간, 번역과 여러 나라 말, 음악, 길찾기, 크롬과 계산기 열기, "
@@ -3108,17 +2837,14 @@ def parse_command(raw_command):
                           "예를 들면 크롬 열어줘, 오늘 날씨 어때, 서울역 가는 길 알려줘, 처럼 말씀해 주세요."),
                 "action": "info", "matched": "help"}
 
-    # 5.7b) 목소리 등록 해제 ("목소리 등록 지워줘")
     if re.search(r"목소리\s*(등록)?\s*(지워|삭제|해제|초기화)", cmd):
         reset_voiceprint()
         return {"reply": "목소리 등록을 지웠어요. 이제 누구 목소리든 알아들을게요.", "action": "info", "matched": "voice_reset"}
 
-    # 5.8a) 버전 안내
     if RE_VERSION.search(cmd):
         return {"reply": f"지금 저는 자비스 버전 {JARVIS_VERSION}입니다. 계속 발전하고 있죠.",
                 "action": "info", "matched": "version"}
 
-    # 5.8b) 계산기 / 동전 / 주사위 / 스크린샷
     calc = do_calc(cmd)
     if calc:
         return {"reply": calc, "action": "info", "matched": "calc"}
@@ -3142,12 +2868,10 @@ def parse_command(raw_command):
             return {"reply": "화면을 캡처해 사진 폴더에 저장했습니다.", "action": "system", "matched": p}
         return {"reply": "스크린샷을 저장하지 못했습니다.", "action": "error", "matched": None}
 
-    # 5.8c) 대화 기억 지우기 ("대화 기억 지워줘" / "기억 삭제")
     if re.search(r"(대화\s*)?(기억|메모리)\s*(전부|다|모두)?\s*(지워|삭제|초기화|없애)", cmd):
         clear_chat_history()
         return {"reply": "지난 대화 기억을 모두 지웠습니다.", "action": "info", "matched": "clear_memory"}
 
-    # 5.9) 메모 / 할 일 (지우기 → 읽기 → 추가 순으로 판정)
     if RE_NOTE_CLEAR.search(cmd):
         clear_notes()
         return {"reply": "메모를 모두 지웠습니다.", "action": "info", "matched": "note"}
@@ -3166,13 +2890,9 @@ def parse_command(raw_command):
             return {"reply": f"메모했습니다. {note}.", "action": "info", "matched": "note"}
         return {"reply": "메모할 내용을 함께 말씀해 주세요.", "action": "none", "matched": None}
 
-    # 5.11) 금융(환율·주가)은 기능에서 뺐음 → 대화 AI가 지어내지 않게 바로 안내
     if (RE_FX.search(cmd) or RE_STOCK.search(cmd)) and FINANCE_ENABLED is False:
         return {"reply": "주가나 환율 같은 금융 기능은 빼 두었어요, 보스.", "action": "info", "matched": "finance_off"}
 
-    # 6) 자주 쓰는 웹사이트 (단, "검색/찾아" 의도가 있으면 사이트를 그냥 열지 않고
-    #    아래 검색 처리로 넘깁니다. "구글에서 OO 검색해줘"에서 '구글'만 열리는 문제 방지)
-    # '유튜브 보는 거 좋아해?'처럼 사이트 이름이 나온 질문·잡담이면 열지 않음 (열어/켜/보여 같은 부탁이 있을 때만)
     site_chat = re.search(r"(좋아|싫어|뭐야|뭔데|알아|어때|어떄|왜|재밌|해봤|봤어|아니|많이|자주|써\s*봤)", cmd) and \
         not re.search(r"(열어|켜|틀어|띄워|보여|들어가|가\s*줘|실행|열기|오픈|open)", cmd, re.I)
     if not has_search_intent and not site_chat:
@@ -3181,21 +2901,16 @@ def parse_command(raw_command):
                 webbrowser.open(url)
                 return {"reply": f"{key}{particle(key,'을','를')} 열게요.", "action": "website", "matched": key}
 
-    # 7) 자주 쓰는 폴더 (탐색기 창은 전체 화면으로 엽니다)
-    #    '그림판'의 '그림', '음악 틀어줘'처럼 폴더를 말한 게 아닌 경우는 건너뜀
     for key, path in FOLDER_KEYWORDS.items():
         if re.search(re.escape(key) + r"(?![가-힣])|" + re.escape(key) + r"\s*폴더", cmd) \
                 and not re.search(r"(틀어|재생|들려|플레이)", cmd) \
                 and (re.search(r"(열어|열기|열|보여|띄워|켜|들어가)", cmd) or re.search(re.escape(key) + r"\s*폴더", cmd)):
-            # '사진 찍는데 줄 길다'처럼 여는 말 없이 단어만 나온 건 폴더 열기가 아님
             if os.path.isdir(path):
                 open_path_maximized(path)
                 return {"reply": f"{key} 폴더를 열게요.", "action": "folder", "matched": path}
             else:
                 return {"reply": f"{key} 폴더를 찾을 수 없습니다.", "action": "error", "matched": None}
 
-    # 8) 설치된 프로그램 (파일 탐색기는 전체 화면으로 엽니다: 클래식 explorer.exe와
-    # "AppsFolder"를 통해 여는 UWP 항목(uwp:Microsoft.Windows.Explorer) 둘 다 해당)
     prog_key, prog_path = find_program(cmd_lower) if re.search(r"(열어|열기|켜|켜줘|실행|띄워|시작|틀어|들어가)", cmd) \
         else (None, None)
     if prog_path and guest_on() and not guest_program_ok(prog_key, prog_path):
@@ -3207,7 +2922,6 @@ def parse_command(raw_command):
             open_path_maximized(prog_path)
         else:
             open_path(prog_path)
-        # 보스가 부른 이름(예: 크롬)으로 대답 ("chrome를 실행합니다" 처럼 어색하지 않게)
         spoken = next((cmd[cmd_lower.find(a):cmd_lower.find(a) + len(a)]
                        for a in sorted(PROGRAM_ALIASES, key=len, reverse=True)
                        if re.search(r"[가-힣]", a) and a in cmd_lower), None) \
@@ -3217,7 +2931,6 @@ def parse_command(raw_command):
                 "snipping tool": "캡처 도구", "command prompt": "명령 프롬프트"}.get(prog_key, prog_key)
         return {"reply": f"네, {spoken}{particle(spoken,'을','를')} 열었어요.", "action": "program", "matched": prog_path}
 
-    # 8.5) 아는 프로그램 이름인데 이 컴퓨터에서 못 찾음 → AI로 넘기지 않고 솔직하게 안내
     if re.search(r"(열어|켜|실행|띄워)", cmd):
         missing = next((al for al in sorted(PROGRAM_ALIASES, key=len, reverse=True)
                         if re.search(r"[가-힣]", al) and al in cmd_lower and PROGRAM_ALIASES[al] != "spotify"
@@ -3226,7 +2939,6 @@ def parse_command(raw_command):
             return {"reply": f"{missing}{particle(missing, '은', '는')} 이 컴퓨터에 설치돼 있지 않은 것 같아요.",
                     "action": "error", "matched": None}
 
-    # 9) 파일 검색 (동사류 제거 후 남는 키워드로, 캐시된 인덱스에서 검색)
     keyword = strip_verbs(cmd)
     if keyword and not guest_on() and re.search(r"(열어|열기|켜|틀어|띄워|실행|보여|재생)", cmd) \
             and not re.fullmatch(r"(ppt|pptx|pdf|hwp|docx?|xlsx?|txt|mp3|mp4|사진|영상|파일)", keyword.lower()):
@@ -3236,11 +2948,9 @@ def parse_command(raw_command):
             name = os.path.basename(found)
             return {"reply": f"{name} 파일을 열게요.", "action": "file", "matched": found}
 
-    # 9.5) 음악 재생: 유튜브 뮤직에서 첫 곡을 바로 재생 (웹사이트/프로그램/파일이 아니면 여기로)
     if RE_MUSIC.search(cmd) and re.search(r"(틀어|재생|들려|플레이|켜|듣고\s*싶|스포티)", cmd) and not has_search_intent:
         return handle_music(cmd)
 
-    # 10) 웹 검색 요청으로 처리 ("네이버"면 네이버, "유튜브"면 유튜브, 그 외 구글)
     if has_search_intent:
         if "네이버" in cmd:
             engine, label = "naver", "네이버"
@@ -3248,7 +2958,6 @@ def parse_command(raw_command):
             engine, label = "youtube", "유튜브"
         else:
             engine, label = "google", "구글"
-        # 검색어만 남기기: 동사류 제거 + 사이트 지시어/조사 제거
         query = strip_verbs(cmd)
         query = re.sub(r"(구글|네이버|유튜브|youtube)", " ", query, flags=re.IGNORECASE)
         query = re.sub(r"(에서|에 대해서|에 대해|에대해|에 관해서|에 관해|관련해서|관련된|관련한|관련|좀)", " ", query)
@@ -3271,12 +2980,10 @@ def parse_command(raw_command):
             webbrowser.open(url)
             return {"reply": f"{label}에서 '{query}' 찾아드릴게요.", "action": "search", "matched": query}
 
-    # 10.5) 위키백과: "OO에 대해 알려줘 / OO 뜻 / OO 위키" → 요약을 읽어줍니다.
     if RE_WIKI.search(cmd) and not (guest_on() and re.search(r"누구(야|니|예요|에요|지)", cmd)):
         topic = re.sub(r"(위키백과|위키|에\s*대해서|에\s*대해\s*(설명|알려)\S*|뜻이?\s*뭐\S*|무슨\s*뜻|"
                        r"누구야|누구니|이?\s*뭐야|알려줘|설명해줘|좀|이|가|은|는)", " ", cmd)
         topic = re.sub(r"\s+", " ", topic).strip()
-        # "넌 누구야?", "나 누구야?" 같은 건 사전 검색이 아니라 대화로 넘김
         if re.fullmatch(r"(넌|너|니|당신|자비스|jarvis|나|난|내|저|전|우리|그거|이거|저거)?", topic, re.I) \
                 or re.match(r"(너의?|네|니|당신의?|자비스의?|나의?|내|제)(\s|$)", topic, re.I):
             topic = ""
@@ -3285,7 +2992,6 @@ def parse_command(raw_command):
             if summary:
                 return {"reply": summary, "action": "info", "matched": "wiki"}
 
-    # 11) 보안 상태 수동 확인 ("보안 확인해줘" / "보안 상태 점검해줘")
     if RE_SECURITY_CHECK.search(cmd):
         issues = check_security()
         if issues:
@@ -3296,15 +3002,6 @@ def parse_command(raw_command):
     return {"reply": "음, 잘 못 알아들었어요. 다시 한 번 말해 줄래요?", "action": "none", "matched": None}
 
 
-# ---------------------------------------------------------------------------
-# 자연어 이해 보조: 로컬 Ollama (선택 사항)
-# ---------------------------------------------------------------------------
-# parse_command()는 규칙(키워드/정규식) 매칭이라 "OO 열어줘" 같은 단순 패턴만
-# 알아듣고, "유튜브 열고 볼륨도 낮춰줘" 같은 복합 문장은 이해하지 못합니다.
-# 이를 보완하기 위해, 컴퓨터에 Ollama(https://ollama.com, 무료/설치형/API 키
-# 불필요)가 떠 있으면 그걸로 문장을 규칙 엔진이 알아듣는 짧은 명령 여러 개로
-# 쪼개서 다시 넣어봅니다. Ollama가 없거나 꺼져 있으면 이 기능은 조용히 빠지고
-# 예전처럼 규칙 기반 결과만 사용합니다 (핵심 기능 동작에는 영향 없음).
 OLLAMA_URL = os.environ.get("JARVIS_OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("JARVIS_OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_TIMEOUT_SEC = 5
@@ -3339,13 +3036,10 @@ OLLAMA_SYSTEM_PROMPT = (
     "# 예시\n"
     '입력: "유튜브 틀고 소리 줄여줘" -> {"commands": ["유튜브 열어줘", "볼륨 내려줘"]}\n'
     '입력: "카톡 좀 꺼줘" -> {"commands": ["카카오톡 종료해줘"]}\n'
-    '입력: "서울대학교 좀 찾아봐" -> {"commands": ["서울대학교 검색해줘"]}\n'
+    '입력: "국립중앙박물관 좀 찾아봐" -> {"commands": ["국립중앙박물관 검색해줘"]}\n'
     '입력: "오늘 기분이 어때?" -> {"commands": []}'
 )
 
-# "유튜브 열고 볼륨도 낮춰줘"처럼 문장 안에 동사+"고"로 이어지는 절이 있거나
-# "그리고/한 다음에" 같은 접속 표현이 있으면 복합 문장일 가능성이 높다고 봅니다.
-# (완벽한 판별은 아니고, LLM 재해석을 시도해볼지 결정하는 값싼 휴리스틱입니다)
 COMPOUND_CONNECTOR_RE = re.compile(r"(그리고|한\s*다음|한\s*후에|그런\s*다음|고\s*나서|고서)")
 VERB_AND_THEN_RE = re.compile(r"[가-힣]{1,10}고\s+\S")
 
@@ -3359,19 +3053,15 @@ _PAIR_OPEN_RE = re.compile(r"^\s*(\S{1,8}?)\s*(이랑|랑|하고|와|과|그리�
 
 
 def _rule_split_command(cmd):
-    """'날씨 알려줘 노래 틀어줘' → ['날씨 알려줘', '노래 틀어줘'] (부탁 끝말마다 자름).
-    '메모장이랑 유튜브 같이 열어줘' → ['메모장 열어줘', '유튜브 열어줘']"""
     pm = _PAIR_OPEN_RE.search(cmd)
     if pm:
         verb = pm.group(7)
         return [f"{pm.group(1)} {verb}줘", f"{pm.group(3)} {verb}줘"]
-    # '크롬 열고 사랑해를 영어로 말해줘' → ['크롬 열어줘', '사랑해를 영어로 말해줘']
     gm = _GO_SPLIT_RE.search(cmd)
     if gm and cmd[gm.end():].strip():
         first = cmd[:gm.start(2)] + _GO_TO_REQUEST[gm.group(2)]
         rest = re.sub(r"^(그리고|그다음에?|또)\s+", "", cmd[gm.end():].strip())
         return [first.strip(), rest]
-    # '125 곱하기 8은 얼마야? 주사위 던져줘' → 물음표에서 나눔 (부탁이 하나라도 섞여 있을 때만)
     qs = _question_split(cmd)
     if qs:
         return qs
@@ -3386,14 +3076,11 @@ def _rule_split_command(cmd):
         pieces[-1] = (pieces[-1] + " " + cmd[start:].strip(" ,.!?~")).strip()
     pieces = [re.sub(r"^(그리고|그다음에?|다음에|또|그럼|그러고|그리고\s*나서)\s+", "", p) for p in pieces]
     pieces = [p for p in pieces if len(p) >= 2]
-    # 여기서 parse_command로 미리 확인하면 프로그램이 두 번 열리므로(실행이 함께 일어남) 확인하지 않음.
-    # 나눈 뒤 알아듣지 못한 조각은 아래에서 빠짐.
     return pieces if len(pieces) >= 2 else None
 
 
 def _question_split(cmd):
     qs = [p.strip(" ,.!~") for p in re.split(r"(?<=[?？])\s+", cmd) if len(p.strip(" ,.!?~？")) >= 2]
-    # '어떻게 가야 돼? 길 찾아줘'처럼 뒤 부탁이 앞 질문을 다시 말한 것이면 나누지 않음
     if len(qs) >= 2 and re.match(r"^(그럼\s*)?(길|그거|이거|거기|그것|그\s*길|방법|빨리)\s*(좀\s*)?\S+$", qs[-1]):
         return None
     if len(qs) >= 2 and (any(_REQUEST_END_RE.search(p) or re.search(r"번역해", p) for p in qs)
@@ -3402,14 +3089,12 @@ def _question_split(cmd):
     return None
 
 
-# 앞말이 안 들리고 '알려줘'만 남은 조각 (시끄러운 곳에서 자주 생김)
 _BARE_REQUEST_RE = re.compile(r"^\s*(좀\s*)?(알려|열어|켜|틀어|찾아|보여|말해|해)\s*(줘|봐|주세요|줄래)\s*$")
 _WX_ICONS = [("천둥", "⛈️"), ("비", "🌧️"), ("소나기", "🌦️"), ("눈", "❄️"), ("안개", "🌫️"), ("흐림", "☁️"),
              ("구름", "⛅"), ("맑", "☀️")]
 
 
 def _card_for(r):
-    """대답을 화면에 크게 보여 줄 카드 (부스에서 멀리서도 보이게). 해당 없으면 None."""
     m, rep_ = r.get("matched"), r.get("reply") or ""
     now = datetime.datetime.now()
     if m == "weather" and r.get("action") == "info":
@@ -3453,14 +3138,11 @@ def _card_for(r):
 
 
 def _looks_compound(cmd):
-    # '계산기 켜줘 크롬 열어봐'처럼 '하고' 없이 부탁을 두 번 이어 말한 것도 여러 명령
     return bool(COMPOUND_CONNECTOR_RE.search(cmd) or VERB_AND_THEN_RE.search(cmd)
                 or len(_REQUEST_END_RE.findall(cmd)) >= 2 or _PAIR_OPEN_RE.search(cmd) or _question_split(cmd))
 
 
 def ollama_available():
-    """로컬 Ollama가 떠 있는지 확인합니다. 매번 네트워크를 치지 않도록 결과를
-    OLLAMA_RECHECK_SEC 동안 캐싱하고, 상태가 바뀔 때만 콘솔에 안내를 남깁니다."""
     now = time.time()
     state = _OLLAMA_STATE
     if state["available"] is not None and (now - state["checked_at"]) < OLLAMA_RECHECK_SEC:
@@ -3485,9 +3167,6 @@ def ollama_available():
 
 
 def llm_split_command(raw_command):
-    """Ollama에게 자유 발화를 규칙 엔진이 알아듣는 짧은 명령 여러 개로 쪼개달라고
-    요청합니다. Ollama가 없거나, 응답이 이상하거나, 시간 초과되면 None을 돌려주고
-    호출 쪽에서 원래(규칙 기반) 결과로 조용히 되돌아가게 합니다."""
     if not ollama_available():
         return None
 
@@ -3527,29 +3206,11 @@ def llm_split_command(raw_command):
     return cleaned or None
 
 
-# ---------------------------------------------------------------------------
-# 자연어 이해 보조 2: 클라우드 Gemini API (선택 사항, 무료 등급)
-# ---------------------------------------------------------------------------
-# Ollama가 없어도(저사양 노트북 등), Google Gemini 무료 API 키가 있으면 그걸로
-# 복합/자유 문장을 규칙 엔진이 알아듣는 짧은 명령으로 쪼갭니다. 무거운 계산은
-# 구글 서버가 하므로 이 노트북 성능과 무관합니다. 키가 없거나, 실패하거나,
-# 하루 한도를 초과하면 조용히 규칙 기반 결과로 되돌아갑니다(자비스는 안 멈춤).
-#
-# API 키 넣는 법 (둘 중 아무거나):
-#   1) 이 폴더에 gemini_key.txt 파일을 만들고 그 안에 키(AIza...)만 붙여넣기
-#   2) 환경변수 JARVIS_GEMINI_API_KEY 에 키를 넣기
-# 키 발급: https://aistudio.google.com/apikey (구글 로그인 → Create API key, 무료)
-# 'latest' 별칭은 구글이 최신 모델을 자동으로 가리켜 주므로 버전이 단종돼도 안전합니다.
-# 무료/신규 프로젝트에서 접근 가능한 모델은 보통 flash-lite 계열입니다. 프로젝트 접근이
-# 정상이고 더 똑똑한 모델을 쓰고 싶으면 환경변수 JARVIS_GEMINI_MODEL=gemini-flash-latest
-# 로 바꿔보세요(단, 무료 등급/프로젝트에 따라 403으로 거부될 수 있습니다).
 GEMINI_MODEL = os.environ.get("JARVIS_GEMINI_MODEL", "gemini-flash-lite-latest")
 GEMINI_TIMEOUT_SEC = 8
 GEMINI_KEY_FILE = os.path.join(BASE_DIR, "gemini_key.txt")
 _GEMINI_STATE = {"announced": False}
 
-# Gemini 회로 차단기: 403(접근 거부) 등으로 실패하면 일정 시간 동안 호출을 아예
-# 건너뛰어, 매번 실패 요청을 보내느라 반응이 느려지는 것을 막습니다.
 _GEMINI_BREAKER = {"until": 0.0, "warned": False}
 
 
@@ -3563,9 +3224,6 @@ def _gemini_trip(seconds=600):
         print(f"[JARVIS] Gemini 호출을 {seconds//60}분간 중단합니다(반복 실패). 그동안 규칙 기반으로만 동작합니다.")
         _GEMINI_BREAKER["warned"] = True
 
-# 무료 등급 하루 요청 한도(추정치). 실제 한도는 모델/계정마다 달라 정확하지 않으므로
-# "오늘 사용한 횟수"를 우리가 직접 세고, 남은 양은 이 값 기준으로 어림잡아 보여줍니다.
-# 실제 값은 https://aistudio.google.com/rate-limit 에서 확인하고 여기 맞춰 바꾸면 됩니다.
 GEMINI_DAILY_LIMIT = int(os.environ.get("JARVIS_GEMINI_DAILY_LIMIT", "1000"))
 GEMINI_USAGE_FILE = os.path.join(BASE_DIR, "gemini_usage.json")
 _GEMINI_USAGE = {"date": None, "count": 0, "exhausted": False}
@@ -3573,15 +3231,11 @@ _GEMINI_USAGE_LOCK = threading.Lock()
 
 
 def _pacific_day():
-    """태평양시간 기준 날짜 문자열. Gemini 하루 한도는 태평양 자정에 리셋됩니다.
-    (tzdata 없이 동작하도록 UTC-8 고정 오프셋으로 어림합니다 - 서머타임엔 최대 1시간 오차)"""
     import datetime
     return (datetime.datetime.utcnow() - datetime.timedelta(hours=8)).date().isoformat()
 
 
 def _load_gemini_usage():
-    """디스크에 저장해 둔 오늘 사용량을 불러옵니다. 서버를 재시작해도 같은 날이면
-    카운트가 이어져서(구글의 실제 카운트처럼) 남은 요청량이 정확하게 유지됩니다."""
     try:
         with open(GEMINI_USAGE_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -3589,7 +3243,7 @@ def _load_gemini_usage():
             _GEMINI_USAGE.update({
                 "date": data["date"],
                 "count": int(data.get("count", 0)),
-                "exhausted": False,   # 분당 한도로 잠깐 걸린 표시가 남는 걸 방지 (재시작 시 초기화)
+                "exhausted": False,
             })
     except Exception:
         pass
@@ -3604,8 +3258,6 @@ def _save_gemini_usage():
 
 
 def _gemini_note_call(exhausted=False):
-    """Gemini에 실제 요청을 한 번 보냈을 때 호출. 날짜가 바뀌면 카운터를 리셋하고,
-    매번 디스크에 저장해 재시작 후에도 오늘 사용량이 유지되게 합니다."""
     with _GEMINI_USAGE_LOCK:
         today = _pacific_day()
         if _GEMINI_USAGE["date"] != today:
@@ -3619,8 +3271,6 @@ def _gemini_note_call(exhausted=False):
 
 
 def gemini_usage_snapshot():
-    """화면(/stats)에 넘길 AI 사용량 요약. 활성 제공자(Groq 우선, 없으면 Gemini)와
-    오늘 사용/남은 요청량을 반환합니다. 키가 하나도 없으면 enabled=False."""
     if groq_key():
         provider, limit, enabled = "Groq", GROQ_DAILY_LIMIT, True
     elif gemini_key():
@@ -3647,13 +3297,11 @@ def gemini_usage_snapshot():
 
 
 def gemini_key():
-    """환경변수 또는 gemini_key.txt 에서 API 키를 읽습니다. 없으면 빈 문자열."""
     key = os.environ.get("JARVIS_GEMINI_API_KEY", "").strip()
     if key:
         return key
     try:
         with open(GEMINI_KEY_FILE, "r", encoding="utf-8") as f:
-            # 파일 안의 주석(#로 시작)과 빈 줄은 무시하고 첫 키 값만 취합니다.
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#"):
@@ -3664,9 +3312,6 @@ def gemini_key():
 
 
 def gemini_split_command(raw_command):
-    """Gemini에게 자유 발화를 규칙 엔진이 알아듣는 짧은 명령 목록으로 쪼개달라고
-    요청합니다. 키가 없거나 응답이 이상하거나 시간 초과/한도 초과면 None을 돌려주고
-    호출 쪽에서 규칙 기반 결과로 조용히 되돌아가게 합니다."""
     key = gemini_key()
     if not key or _gemini_blocked():
         return None
@@ -3691,20 +3336,19 @@ def gemini_split_command(raw_command):
         )
         with urllib.request.urlopen(req, timeout=GEMINI_TIMEOUT_SEC) as resp:
             body = json.loads(resp.read().decode("utf-8"))
-        _gemini_note_call()  # 요청 1회 사용 기록 (남은 요청량 표시용)
+        _gemini_note_call()
         parts = body["candidates"][0]["content"]["parts"]
         content = "".join(p.get("text", "") for p in parts)
         parsed = json.loads(content)
         commands = parsed.get("commands")
     except urllib.error.HTTPError as e:
-        # 429 = 하루/분당 한도 초과. 그 외 오류 포함해 모두 규칙 기반으로 폴백.
-        _gemini_note_call(exhausted=(e.code == 429))  # 서버에 닿은 요청이므로 사용으로 기록
+        _gemini_note_call(exhausted=(e.code == 429))
         if e.code == 429:
             print("[JARVIS] Gemini 무료 한도를 초과했습니다. 규칙 기반 이해로 돌아갑니다(내일 리셋).")
-            _gemini_trip(600)   # 한도 초과: 10분간 호출 중단
+            _gemini_trip(600)
         elif e.code in (403, 401):
             print(f"[JARVIS] Gemini 접근 거부({e.code}). 규칙 기반으로 동작합니다(키/프로젝트 확인 필요).")
-            _gemini_trip(1800)  # 접근 거부: 30분간 호출 중단(헛요청으로 느려지는 것 방지)
+            _gemini_trip(1800)
         else:
             print(f"[JARVIS] Gemini 요청 실패({e.code}). 규칙 기반 이해로 돌아갑니다.")
             _gemini_trip(120)
@@ -3723,12 +3367,6 @@ def gemini_split_command(raw_command):
     return cleaned or None
 
 
-# ---------------------------------------------------------------------------
-# 대화 기능: 명령이 아닌 말에는 자비스가 대화로 답합니다 (Gemini, 선택 사항)
-# ---------------------------------------------------------------------------
-# 명령(프로그램/웹/검색 등)으로 해석되지 않는 말이면, 자비스가 아이언맨의 자비스처럼
-# 짧게 대화로 응답하고 그 답을 음성으로 말합니다. Gemini 키가 없으면 이 기능은 빠지고
-# 예전처럼 "이해하지 못했습니다"로 답합니다.
 CONVERSATION_ENABLED = True
 GEMINI_CHAT_SYSTEM_PROMPT = (
     "당신은 AI 비서 '자비스(JARVIS)'입니다. 아이언맨의 자비스처럼 살아있는 것처럼 반응하는, "
@@ -3772,16 +3410,13 @@ GEMINI_CHAT_SYSTEM_PROMPT = (
     "'너 나 어떻게 생각해?'->'제 보스시죠. 곁에서 모시는 게 즐겁습니다.'"
 )
 
-# 최근 대화 맥락(자비스가 이전 대화를 기억하도록). 제공자(Gemini/Groq)에 상관없이
-# {"user":..., "assistant":...} 쌍으로 중립 저장하고, 각 제공자 형식으로 변환해 씁니다.
-CONVERSATION_MAX_PAIRS = 6  # 최근 대화 4번까지 기억 (너무 크면 분당 토큰 한도에 잘 걸림)
+CONVERSATION_MAX_PAIRS = 6
 CHAT_HISTORY_FILE = os.path.join(BASE_DIR, "chat_history.json")
 _CHAT_HISTORY = []
 _CHAT_HISTORY_LOCK = threading.Lock()
 
 
 def _load_chat_history():
-    """지난 대화 기록을 디스크에서 불러옵니다 (서버를 껐다 켜도 이어서 기억하도록)."""
     try:
         with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -3800,13 +3435,11 @@ def _save_chat_history():
         pass
 
 
-_GUEST_HISTORY = []   # 체험 모드 대화는 보스 기억과 따로, 메모리에만 (켜고 끌 때 비움)
+_GUEST_HISTORY = []
 _BAD_REPLY_RE = re.compile(r"(찾지\s*못했어요|짧게\s*다시\s*말해|잘\s*못\s*알아들었|체험\s*모드에\s*진입)")
 
 
 def _chat_history_snapshot():
-    """대화 AI에 보여 줄 최근 대화. 실패·안내 대답이나, 한국어 모드인데 외국어로 된 대답은 빼서
-    AI가 엉뚱한 대답을 흉내 내지 않게 함."""
     with _CHAT_HISTORY_LOCK:
         hist = list(_GUEST_HISTORY) if guest_on() else list(_CHAT_HISTORY)
     ko = reply_lang() == "ko"
@@ -3816,14 +3449,14 @@ def _chat_history_snapshot():
 
 def _chat_history_add(user_text, model_text):
     if guest_on():
-        with _CHAT_HISTORY_LOCK:   # 체험 모드(손님) 대화는 보스의 대화 기억에 남기지 않음
+        with _CHAT_HISTORY_LOCK:
             _GUEST_HISTORY.append({"user": user_text, "assistant": model_text})
             del _GUEST_HISTORY[:-4]
         return
     with _CHAT_HISTORY_LOCK:
         _CHAT_HISTORY.append({"user": user_text, "assistant": model_text})
         del _CHAT_HISTORY[:-CONVERSATION_MAX_PAIRS]
-        _save_chat_history()   # 매 대화마다 디스크에 저장해 재시작 후에도 유지
+        _save_chat_history()
 
 
 def clear_chat_history():
@@ -3833,9 +3466,6 @@ def clear_chat_history():
 
 
 def gemini_chat(user_text):
-    """명령이 아닌 자유 발화에 자비스 페르소나로 대화 응답을 생성합니다. 최근 대화
-    맥락을 함께 보내 자연스럽게 이어지게 하고, 성공하면 그 결과를 맥락에 추가합니다.
-    키가 없거나 실패/한도 초과면 None을 돌려주고 호출 쪽에서 기본 응답으로 넘어갑니다."""
     key = gemini_key()
     if not key or _gemini_blocked():
         return None
@@ -3880,41 +3510,26 @@ def gemini_chat(user_text):
     return text or None
 
 
-# ---------------------------------------------------------------------------
-# Groq API (무료, 빠름, OpenAI 호환) - Gemini 대안. 키가 있으면 Gemini보다 우선 사용.
-# ---------------------------------------------------------------------------
-# 키 넣는 법: 이 폴더의 groq_key.txt 에 키(gsk_...)를 붙여넣거나, 환경변수
-#   JARVIS_GROQ_API_KEY 에 넣으세요. 키 발급: https://console.groq.com (카드 불필요, 무료)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
-# llama-3.3-70b-versatile 는 2026-06 단종되어, 현재 유효한 모델로 교체했습니다.
-# (다른 모델을 쓰려면 환경변수 JARVIS_GROQ_MODEL 로 지정. 목록은 console.groq.com/docs/models)
 GROQ_MODEL = os.environ.get("JARVIS_GROQ_MODEL", "qwen/qwen3.8-27b")
-# 음성 → 텍스트(Whisper). 브라우저 인식보다 한국어가 훨씬 정확합니다. turbo=빠름.
-GROQ_WHISPER_MODEL = os.environ.get("JARVIS_GROQ_WHISPER_MODEL", "whisper-large-v3")  # 정식(더 정확)
-GROQ_WHISPER_FALLBACK = "whisper-large-v3-turbo"  # 정식 모델을 못 쓰면 자동으로 이걸로 전환
-# Whisper에 미리 알려주는 자주 쓰는 말. 이 단어들을 훨씬 정확히 받아씁니다 (짧게 유지).
+GROQ_WHISPER_MODEL = os.environ.get("JARVIS_GROQ_WHISPER_MODEL", "whisper-large-v3")
+GROQ_WHISPER_FALLBACK = "whisper-large-v3-turbo"
 WHISPER_PROMPT = os.environ.get(
     "JARVIS_WHISPER_PROMPT",
     "자비스, 크롬 열어, 유튜브, 카카오톡, 네이버, 구글, 유튜브 뮤직, 볼륨 올려, 음소거, 셧다운, "
     "전원 꺼, 오늘 날씨, 지금 몇 시야, 뉴스, 메모해줘, 번역, 검색해줘, VS 코드, 우분투, 헤이 자비스, "
     "내 목소리, 기억해줘, 알려줘, 조금, 발표 모드")
-# (주의) 힌트 단어는 잡음만 들릴 때 Whisper가 그대로 지어내는 말이기도 함 → 새 기능 이름을 함부로 넣지 말 것
-# (v13.6에 '퀴즈'를 넣었더니 아무도 말 안 했는데 '퀴즈'로 받아써서 퀴즈를 시작했음)
-WHISPER_NO_SPEECH = 0.6  # 구간마다 '말이 아닐' 확률이 이보다 높으면 잡음으로 보고 버림
+WHISPER_NO_SPEECH = 0.6
 _WHISPER_STATE = {"model": GROQ_WHISPER_MODEL, "turbo_until": 0.0}
 GROQ_TIMEOUT_SEC = 8
 GROQ_KEY_FILE = os.path.join(BASE_DIR, "groq_key.txt")
 GROQ_DAILY_LIMIT = int(os.environ.get("JARVIS_GROQ_DAILY_LIMIT", "1000"))
 _GROQ_STATE = {"announced": False}
-_GROQ_BREAKER = {}   # 모델별 쉬는 시간 {모델: 언제까지}
-# 받아쓰기 교정은 대화 모델과 다른 모델로 (Groq 무료 한도는 모델마다 따로라서 대화가 덜 막힘)
+_GROQ_BREAKER = {}
 GROQ_FIX_MODEL = os.environ.get("JARVIS_GROQ_FIX_MODEL", "openai/gpt-oss-20b")
 
 
-# Groq를 'AI 두뇌'(받아쓰기 교정·문장 나누기·번역, 그리고 Claude가 막혔을 때 대신 대화)로 쓸지.
-# 받아쓰기(Whisper)는 이 스위치와 상관없이 계속 Groq를 씀 (Claude에는 받아쓰기 기능이 없음).
-# 끄려면 아래 "1"을 "0"으로 바꾸거나, 환경변수 JARVIS_GROQ_AI=0 으로 하면 됨.
 GROQ_AI_ENABLED = os.environ.get("JARVIS_GROQ_AI", "1") == "1"
 
 
@@ -3946,7 +3561,6 @@ def _groq_trip(seconds=120, model=None):
 
 
 def _groq_request(messages, json_mode=False, max_tokens=400, temperature=0.4, model=None):
-    """Groq(OpenAI 호환)에 채팅 요청을 보내고 응답 텍스트를 반환합니다. 실패 시 None."""
     key = groq_key()
     model = model or GROQ_MODEL
     if not GROQ_AI_ENABLED or not key or _groq_blocked(model):
@@ -3963,10 +3577,10 @@ def _groq_request(messages, json_mode=False, max_tokens=400, temperature=0.4, mo
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
     if "qwen" in model.lower():
-        payload["reasoning_effort"] = "none"   # 속으로 생각하는 단계를 꺼서 대답을 빠르게
+        payload["reasoning_effort"] = "none"
     elif "gpt-oss" in model.lower():
         payload["reasoning_effort"] = "low"
-        payload["max_tokens"] = max(max_tokens, 300)   # 생각하는 데 쓰는 몫까지
+        payload["max_tokens"] = max(max_tokens, 300)
     try:
         req = urllib.request.Request(
             GROQ_URL,
@@ -3974,29 +3588,25 @@ def _groq_request(messages, json_mode=False, max_tokens=400, temperature=0.4, mo
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {key}",
-                # 기본 urllib User-Agent가 Cloudflare에 막히는 경우가 있어 명시합니다.
                 "User-Agent": "jarvis-local/1.0",
             },
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=GROQ_TIMEOUT_SEC) as resp:
             body = json.loads(resp.read().decode("utf-8"))
-        _gemini_note_call()  # AI 사용량 카운터 공유 (화면 표시용)
+        _gemini_note_call()
         content = body["choices"][0]["message"].get("content", "") or ""
-        # 추론형 모델(Qwen 등)이 답 앞에 붙이는 <think>...</think> 생각 부분을 제거합니다.
         content = re.sub(r"<think>.*?</think>", "", content, flags=re.S)
-        content = re.sub(r"^.*?</think>", "", content, flags=re.S)  # 여는 태그만 있는 경우 대비
+        content = re.sub(r"^.*?</think>", "", content, flags=re.S)
         return content.strip()
     except urllib.error.HTTPError as e:
-        # Groq의 429는 대부분 '분당' 토큰/요청 한도라 1분이면 풀립니다. 하루 한도 소진이
-        # 아니므로 exhausted 플래그(빨간 '오늘 한도 소진' 표시)는 세우지 않습니다.
         _gemini_note_call()
         try:
             detail = e.read().decode()[:300]
         except Exception:
             detail = ""
         if e.code == 429:
-            try:   # Groq가 알려 주는 '몇 초 뒤에 다시' 만큼만 쉼 (보통 몇 초)
+            try:
                 wait = float(e.headers.get("retry-after") or 20)
             except Exception:
                 wait = 20
@@ -4023,10 +3633,10 @@ def _whisper_body(boundary, audio_bytes, content_type, filename, model, force_ko
     fields = [("model", model), ("response_format", "verbose_json"), ("temperature", "0")]
     ko = force_ko or reply_lang() == "ko"
     if ko:
-        fields.append(("language", "ko"))   # 다른 언어 모드면 어떤 말로 해도 알아듣게 자동 감지
+        fields.append(("language", "ko"))
     if WHISPER_PROMPT and ko:
         rps = _GAME["kind"] == "rps" and time.time() < _GAME["until"]
-        fields.append(("prompt", WHISPER_PROMPT + (", 가위, 바위, 보자기" if rps else "")))   # 가위바위보 중엔 그 말을 더 잘 듣게
+        fields.append(("prompt", WHISPER_PROMPT + (", 가위, 바위, 보자기" if rps else "")))
     for name, value in fields:
         body += b"--" + b + b"\r\n"
         body += ('Content-Disposition: form-data; name="%s"\r\n\r\n' % name).encode()
@@ -4035,7 +3645,6 @@ def _whisper_body(boundary, audio_bytes, content_type, filename, model, force_ko
     return body
 
 
-# 조용하거나 잡음만 있을 때 받아쓰기 AI가 흔히 지어내는 문장 (뉴스·유튜브 자막에서 배운 것)
 _HALLUCINATION_RE = re.compile(
     r"(MBC|KBS|SBS|YTN|JTBC|연합)\s*뉴스|뉴스\s*\S{2,4}입니다|\S{2,4}\s*기자입니다|기자였습니다|"
     r"시청해\s*주셔서|구독|좋아요|다음\s*(영상|시간)에|자막|번역\s*자막|감사합니다\s*\.?$|"
@@ -4043,8 +3652,6 @@ _HALLUCINATION_RE = re.compile(
 
 
 def strip_hallucinated_tail(text):
-    """'메모장이랑 유튜브 같이 열어줘, 자막도 열어줘'처럼 진짜 말 뒤에 지어낸 조각이 붙은 경우 그 조각만 뺌.
-    남는 말이 없으면 ''."""
     parts = [p.strip() for p in re.split(r"(?<=[,.!?。])\s*", text or "") if p.strip()]
     keep = [p for p in parts if not _HALLUCINATION_RE.search(p)]
     rest = " ".join(keep).strip(" ,")
@@ -4057,8 +3664,6 @@ def looks_hallucinated(text):
 
 
 def _lone_hint_word(text, duration):
-    """잡음만 있을 때 Whisper가 힌트 단어 하나를 목록처럼 쉼표까지 붙여 지어내는 경우 ('음소거,').
-    (긴 잡음에서 '자비스'처럼 쉼표 없이 지어낸 건 _short_from_noise가 소리 크기로 거름)"""
     t = (text or "").strip()
     core = re.sub(r"[\s,.!?~·…'\"]", "", t)
     if not core:
@@ -4071,25 +3676,18 @@ def _lone_hint_word(text, duration):
 
 
 def _looks_like_prompt_echo(text):
-    """조용할 때 Whisper가 힌트 단어 목록을 그대로 읊는 경우를 걸러냅니다.
-    (예전엔 힌트 단어가 3개만 들어가도 버려서 "자비스, 오늘 날씨 어때? 크롬 열어줘" 같은 진짜 명령도 무시했어요.
-     이제는 힌트 단어 3개 이상을 목록 순서 그대로 읊었거나, 5개 이상 나열한 경우만 버립니다.)"""
     norm = lambda x: re.sub(r"[\s,.!?~·…'\"]", "", x or "")
     t = norm(text)
     terms = [x.strip() for x in WHISPER_PROMPT.split(",") if x.strip()]
     hits = sum(1 for x in terms if x in text)
     if hits >= 3 and t in norm(WHISPER_PROMPT):
         return True
-    # 힌트 단어 2개를 목록처럼 쉼표로 끝맺은 것 ('번역, 검색해줘,')
     if hits >= 2 and t in norm(WHISPER_PROMPT) and (text or "").rstrip().endswith(","):
         return True
     return hits >= 5
 
 
 def _strip_prompt_echo_prefix(text):
-    """받아쓰기가 문장 앞에 힌트 단어를 줄줄이 붙인 것을 뗌.
-    '네이버, 코드, 우분투, 헤이 자비스, 고구마에 대해서 어떻게 생각해?' → '고구마에 대해서 어떻게 생각해?'
-    (힌트 단어가 3개 이상 쉼표로 이어질 때만. '자비스, 크롬 열어'처럼 진짜 명령은 그대로)"""
     terms = {x.strip() for x in WHISPER_PROMPT.split(",") if x.strip()}
     words = terms | {w for t in terms for w in t.split()}
     segs = [x.strip() for x in (text or "").split(",")]
@@ -4104,17 +3702,11 @@ def _strip_prompt_echo_prefix(text):
 
 
 def _whisper_ok_langs():
-    """다른 언어 모드에서 한국어 대신 받아들일 언어 (Whisper가 알려 주는 이름, 예: 'japanese'): 영어 + 지금 대답 언어"""
     name = _LANG_NAMES_EN.get(reply_lang(), "English").lower().replace("simplified ", "").replace("traditional ", "")
     return {"english", name}
 
 
-# ---------------------------------------------------------------------------
-# 잡음 제거 (다시 받아쓰기용): 원본으로 못 알아들었는데 사람 말소리가 분명히 있으면, 배경 소음을
-# 깎아서 한 번 더 받아씀. (항상 깎으면 멀쩡한 말까지 망가져서 정확도가 89% → 87%로 떨어졌음.
-# 못 알아들은 말에만 쓰면 '메모장이랑 유튜브 같이 열어줘'처럼 놓친 말을 살림)
-# ---------------------------------------------------------------------------
-DENOISE_RETRY = os.environ.get("JARVIS_DENOISE", "0") == "1"   # 실험해 보니 웅성거림을 말로 잘못 듣는 게 늘어서 기본은 끔 (JARVIS_DENOISE=1로 켬)
+DENOISE_RETRY = os.environ.get("JARVIS_DENOISE", "0") == "1"
 try:
     import numpy as _np
 except Exception:
@@ -4143,7 +3735,6 @@ def _float_to_wav(x, sr):
 
 
 def _speech_contrast(x, sr):
-    """녹음에서 큰 부분(90%)과 조용한 부분(20%)의 소리 크기 비율. 말이 있으면 크고, 잡음만 있으면 1~2"""
     n = int(sr * 0.02)
     if len(x) < n * 40:
         return 0.0
@@ -4153,12 +3744,10 @@ def _speech_contrast(x, sr):
 
 
 def _has_clear_speech(x, sr):
-    """말소리가 배경보다 확실히 큰 구간이 있는지 (잡음만 있는 녹음은 다시 받아쓰지 않음 → 헛소리 방지)"""
     return _speech_contrast(x, sr) >= 3.0
 
 
 def _peak_contrast(x, sr):
-    """가장 큰 0.15초(짧은 한 단어도 잡힘)와 평소(가운데 값) 소리 크기의 비율. 잡음만 있으면 2 안팎"""
     n = int(sr * 0.02)
     if len(x) < n * 20:
         return 0.0
@@ -4170,9 +3759,6 @@ def _peak_contrast(x, sr):
 
 
 def _short_from_noise(text, audio):
-    """아무도 말 안 했는데 조용한 방 잡음(4~6초)에서 '자비스', '퀴즈' 같은 짧은 말을 지어낸 경우.
-    짧은 받아쓰기(4글자 이하) + 긴 녹음(3.8초+) + 가장 큰 순간도 평소 잡음과 비슷함(1.6배 미만) → 버림.
-    (조용한 방 잡음만: 1.3~1.5배 / 잡음 속 아주 작게 말한 '바위': 2.0배 / 크게 말하면 6~28배)"""
     if _np is None or len(re.sub(r"[^가-힣A-Za-z0-9]", "", text or "")) > 4:
         return False
     try:
@@ -4183,7 +3769,6 @@ def _short_from_noise(text, audio):
 
 
 def denoise_audio(x, sr):
-    """주파수별 배경 소음 크기를 조용한 순간에서 재고 그만큼 깎음 (스펙트럼 게이팅)."""
     n_fft, hop = 512, 128
     win = _np.hanning(n_fft).astype(_np.float32)
     pad = _np.concatenate([_np.zeros(n_fft, _np.float32), x, _np.zeros(n_fft, _np.float32)])
@@ -4195,7 +3780,7 @@ def denoise_audio(x, sr):
     noise = quiet.mean(axis=0) if len(quiet) else _np.percentile(mag, 20, axis=0)
     gain = _np.clip(1.0 - 1.5 * noise[None, :] / _np.maximum(mag, 1e-8), 0.12, 1.0)
     gp = _np.pad(gain, ((1, 1), (2, 2)), mode="edge")
-    gain = swv(gp, (3, 5)).mean(axis=(-1, -2))   # 지직거리는 소리(뮤지컬 노이즈) 줄이게 부드럽게
+    gain = swv(gp, (3, 5)).mean(axis=(-1, -2))
     Y = _np.fft.irfft(X * gain, n=n_fft, axis=1) * win
     out = _np.zeros(len(pad), _np.float32)
     ws = _np.zeros(len(pad), _np.float32)
@@ -4205,9 +3790,6 @@ def denoise_audio(x, sr):
     return (out / _np.maximum(ws, 1e-6))[n_fft:n_fft + len(x)]
 
 
-# 붐비는 부스: 손님(마이크 가까이, 가장 크게 말하는 사람) 소리만 남기고 옆 사람 웅성거림은 줄임.
-# 손님 목소리와 배경 차이가 작은(=붐비는) 녹음에만 씀: 시뮬(실제 받아쓰기)에서 붐빌 때 정확도 66% → 70%,
-# 조용한 편인 부스 녹음에 쓰면 오히려 살짝 나빠져서(92% → 91%) 그때는 원본 그대로.
 FOCUS_NEAR_VOICE = os.environ.get("JARVIS_FOCUS", "1") == "1"
 FOCUS_CONTRAST_MAX = 5.0
 
@@ -4222,7 +3804,6 @@ def _contrast(x, sr):
 
 
 def focus_near_voice(x, sr):
-    """가장 큰 목소리보다 12dB 넘게 작은 구간은 10dB 줄이고, 앞뒤의 웅성거림만 있는 부분은 잘라냄."""
     n = int(sr * 0.02)
     m = len(x) // n
     fr = x[:m * n].reshape(m, n)
@@ -4239,8 +3820,6 @@ def focus_near_voice(x, sr):
 
 
 def transcribe_with_denoise_retry(audio, content_type, filename, info):
-    """원본으로 받아쓰고, 말이 있는데 못 알아들었으면 잡음을 깎아 한 번 더.
-    붐비는 녹음이면 먼저 손님(가까운) 목소리만 남겨서 받아씀."""
     original = audio
     if FOCUS_NEAR_VOICE and _np is not None and filename.endswith(".wav"):
         try:
@@ -4274,20 +3853,17 @@ def transcribe_with_denoise_retry(audio, content_type, filename, info):
 
 
 def groq_transcribe(audio_bytes, content_type="audio/wav", filename="audio.wav", info=None):
-    """녹음된 오디오를 Groq Whisper로 받아씁니다. 실패 시 None, 잡음이면 빈 문자열.
-    - 자주 쓰는 단어 힌트(prompt)로 명령어 인식률을 높이고
-    - 구간별 '말 아님' 확률(no_speech_prob)로 잡음에서 나온 헛소리를 버립니다."""
     info = info if info is not None else {}
     key = groq_key()
     if not key:
         info["why"] = "키 없음"
         return None
     force_ko = False
-    other = None   # 다른 언어 모드에서 먼저 받아쓴 결과 (한국어로 다시 받아쓴 것과 비교)
+    other = None
     for _ in range(3):
         model = _WHISPER_STATE["model"]
         if time.time() < _WHISPER_STATE["turbo_until"]:
-            model = GROQ_WHISPER_FALLBACK   # 정식 모델 한도에 걸린 동안은 turbo로 (한도가 따로라 부스에서 안 멈춤)
+            model = GROQ_WHISPER_FALLBACK
         boundary = "----jarvis" + secrets.token_hex(12)
         body = _whisper_body(boundary, audio_bytes, content_type, filename, model, force_ko)
         try:
@@ -4301,15 +3877,12 @@ def groq_transcribe(audio_bytes, content_type="audio/wav", filename="audio.wav",
             )
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-            _gemini_note_call()  # 사용량 카운터 공유
+            _gemini_note_call()
             segs = data.get("segments") or []
-            # '말 아님 확률'이 높고 받아쓰기 자신감도 낮을 때만 잡음 (Whisper 원래 방식).
-            # 부스 웅성거림 속에서는 또렷한 말도 '말 아님 확률'이 0.7~1.0으로 나와서, 그것만 보면 진짜 말을 버림.
             if segs and all((sg.get("no_speech_prob") or 0) > WHISPER_NO_SPEECH and (sg.get("avg_logprob") or 0) < -0.5
                             for sg in segs):
                 info["why"] = "잡음(말 아님) " + (data.get("text") or "").strip()[:30]
-                return ""  # 말이 아니라 잡음
-            # 자신 없게 받아쓴 구간(평균 확률이 아주 낮거나 같은 말 반복)만 있으면 지어낸 말로 봄
+                return ""
             if segs and all((sg.get("avg_logprob") or 0) < -1.0 or (sg.get("compression_ratio") or 0) > 2.4 for sg in segs):
                 info["why"] = "자신 없음 " + (data.get("text") or "").strip()[:30]
                 return ""
@@ -4320,10 +3893,10 @@ def groq_transcribe(audio_bytes, content_type="audio/wav", filename="audio.wav",
                 return ""
             if reply_lang() == "ko" and not re.search(r"[가-힣]", text) and re.search(r"[\u3040-\u30ff\u4e00-\u9fff]", text):
                 info["why"] = "한국어 모드인데 다른 글자 " + text[:20]
-                return ""   # '貯ってった。'처럼 한국어 모드에서 일본어·한자만 나온 건 잡음에서 지어낸 말
+                return ""
             if not re.search(r"\w", text):
                 info["why"] = "글자 없음"
-                return ""   # "." 처럼 문장부호만 나온 경우
+                return ""
             if looks_hallucinated(text) and strip_hallucinated_tail(text):
                 print(f"[JARVIS] 받아쓰기 끝에 붙은 지어낸 말만 뺐어요: {text} → {strip_hallucinated_tail(text)}")
                 text = strip_hallucinated_tail(text)
@@ -4331,17 +3904,13 @@ def groq_transcribe(audio_bytes, content_type="audio/wav", filename="audio.wav",
                 print(f"[JARVIS] 잡음에서 지어낸 말로 보여서 무시했어요: {text}")
                 info["why"] = "지어낸 말 " + text[:30]
                 return ""
-            # 다른 언어 모드에서 보스의 한국어를 아랍어·이탈리아어처럼 엉뚱하게 받아쓰면 한국어로 다시
             heard = (data.get("language") or "").lower()
             conf = (sum((sg.get("avg_logprob") or 0) for sg in segs) / len(segs)) if segs else -1.0
             if force_ko and other is not None:
-                # 영어 등으로 받아쓴 것과 한국어로 받아쓴 것 중 더 자신 있는 쪽 (보스는 주로 한국어라 한국어에 약간 가산점)
-                # 단, 지금 대답 언어나 영어로 들린 경우만 인정 (일본어 모드에서 한국어를 'Taman ronde.'(인도네시아어)로 받아쓴 적 있음)
                 if other[2] in _whisper_ok_langs() and other[1] > conf + 0.15 and not _looks_like_prompt_echo(other[0]):
                     info["why"] = "다른 언어로 들음"
                     return other[0]
             elif not force_ko and reply_lang() != "ko" and heard and heard != "korean":
-                # 다른 언어 모드: 보스의 한국어를 영어("Love you. Bye.")처럼 엉뚱하게 받아쓸 수 있어서 한국어로도 받아써 비교
                 other = (text, conf, heard)
                 force_ko = True
                 continue
@@ -4356,7 +3925,7 @@ def groq_transcribe(audio_bytes, content_type="audio/wav", filename="audio.wav",
                 print(f"[JARVIS] 받아쓰기 앞에 붙은 힌트 단어를 뗐어요: '{text[:40]}' → '{cleaned[:40]}'")
             return cleaned
         except urllib.error.HTTPError as e:
-            _gemini_note_call()   # 429는 분당 한도(잠깐)이므로 '오늘 소진'으로 표시하지 않음
+            _gemini_note_call()
             try:
                 detail = e.read().decode()[:200]
             except Exception:
@@ -4380,8 +3949,6 @@ def groq_transcribe(audio_bytes, content_type="audio/wav", filename="audio.wav",
 
 
 def _extract_json(text):
-    """모델 응답 텍스트에서 첫 번째 {...} JSON 객체를 뽑아 파싱합니다. 실패 시 None.
-    (일부 모델은 response_format을 지원하지 않아 JSON을 텍스트로 돌려줍니다.)"""
     if not text:
         return None
     try:
@@ -4399,7 +3966,6 @@ def _extract_json(text):
 
 
 def groq_split_command(raw_command):
-    """Groq로 자유 발화를 규칙 엔진이 알아듣는 명령 목록으로 쪼갭니다."""
     content = _groq_request(
         [{"role": "system", "content": OLLAMA_SYSTEM_PROMPT},
          {"role": "user", "content": raw_command}],
@@ -4421,8 +3987,6 @@ def groq_split_command(raw_command):
 
 
 def _chat_system_parts():
-    """대화 AI에 줄 지시문을 (안 바뀌는 부분, 매번 바뀌는 부분)으로 나눠서 돌려줌.
-    안 바뀌는 부분(자비스 성격·보스 정보)은 Claude에서 캐싱해 싸고 빠르게 씀."""
     nm = boss_name()
     if guest_on():
         sys_prompt = GEMINI_CHAT_SYSTEM_PROMPT + "\n" + BOSS_PROFILE_GUEST
@@ -4440,7 +4004,7 @@ def _chat_system_parts():
                        "'엄마 이거 봐봐' / '얘들아 이거 봐' / '나 저거 해봤는데 진짜 잘 알아들어'(자비스를 '저거·이거·쟤'라고 부르며 친구에게 하는 말) / "
                        "'아까 그 로봇 부스 재밌었어' / '다리 아프다 좀 앉고 싶다' / '아이씨' / '아 진짜' / '아 짜증나' / '발표가 너무…'(혼잣말) / '너 이따 몇 시에 집에 가?' / '축제 몇 시까지야?'. "
                        "받아쓴 말에 옆 사람 말이 섞여 앞뒤가 안 맞으면, 당신에게 하는 부분에만 답하고 나머지는 무시하세요. "
-                       "방문객의 나이·신분(학생 등)을 짐작해서 말하지 마세요. 방문객이 이름을 말해도 이름으로 부르지 말고 "
+                       "방문객의 나이·신분을 짐작해서 말하지 마세요. 방문객이 이름을 말해도 이름으로 부르지 말고 "
                        "누구든 '보스'라고 부르세요(받아쓰기가 이름을 틀리게 적는 일이 많아요. 이 이유는 말하지 말고 그냥 반갑게 인사하세요). '와 신기하다', '대박' 같은 감탄에는 한 문장으로만 짧게 답하세요. "
                        "'너'가 들어가도 친구에게 하는 말일 수 있어요. 당신(자비스)에게 묻거나 시키는 게 분명할 때만 대답하세요."
                        "\n체험 모드에서는 대화가 끝나면 기억이 지워집니다. '기억해 둘게요' 같은 약속은 하지 마세요."
@@ -4451,7 +4015,7 @@ def _chat_system_parts():
     sys_prompt = ""
     here = current_location().get("query") or current_location().get("name")
     if here and guest_on():
-        here = " ".join(str(here).split()[:2])   # 체험 모드: 동네까지는 알리지 않고 '시·구'까지만
+        here = " ".join(str(here).split()[:2])
     if here:
         sys_prompt += (f"\n보스의 현재 위치(노트북 위치): {here}. 위치를 모른다고 말하지 마세요. "
                        "길을 물으면 'OO 가는 길 알려줘'라고 말하면 지도를 띄워 준다고 안내하세요.")
@@ -4472,7 +4036,6 @@ def _chat_system_parts():
 
 
 def groq_chat(user_text):
-    """Groq로 자비스 페르소나 대화 응답을 생성합니다. 최근 대화 맥락을 함께 보냅니다."""
     stable, dynamic = _chat_system_parts()
     messages = [{"role": "system", "content": stable + "\n" + dynamic}]
     for pair in _chat_history_snapshot():
@@ -4487,22 +4050,18 @@ def groq_chat(user_text):
 
 
 def _is_quiet_reply(text):
-    """대화 AI가 '사람들끼리 하는 말이라 대답 안 함'([조용])이라고 한 경우"""
     return bool(re.fullmatch(r"\W*\[?\s*조용\s*\]?\W*", (text or "").strip()))
 
 
-# --- Claude API: 부스처럼 말이 많을 때 Groq 무료 한도(분당 8천 토큰, 하루 20만 토큰)로는 모자라서 ---
 CLAUDE_KEY_FILE = os.path.join(BASE_DIR, "claude_key.txt")
-# 모델: claude-opus-5-5(가장 똑똑함) / claude-sonnet-5-5(조금 더 빠르고 저렴). 환경변수로 바꿀 수 있음.
-CLAUDE_MODEL = os.environ.get("JARVIS_CLAUDE_MODEL", "claude-sonnet-5-5")   # 보스 선택: Sonnet 5.5
-CLAUDE_EFFORT = os.environ.get("JARVIS_CLAUDE_EFFORT", "low")   # 음성 비서라 생각은 짧게 (빨리 대답)
-CLAUDE_TIMEOUT_SEC = 10   # 넘으면 Groq가 대신 대답 (화면이 기다리는 25초 안에 끝나도록)
+CLAUDE_MODEL = os.environ.get("JARVIS_CLAUDE_MODEL", "claude-sonnet-5-5")
+CLAUDE_EFFORT = os.environ.get("JARVIS_CLAUDE_EFFORT", "low")
+CLAUDE_TIMEOUT_SEC = 10
 _CLAUDE = {"client": None, "key": "", "calls": 0, "date": "", "last_ok": None, "last_sec": None, "off_until": 0.0}
 _CLAUDE_LOCK = threading.Lock()
 
 
 def claude_key():
-    """환경변수 또는 claude_key.txt 에서 키를 읽음 (주석·빈 줄 무시). 없으면 빈 문자열. 키는 절대 출력하지 않음."""
     key = os.environ.get("JARVIS_CLAUDE_API_KEY", "").strip()
     if key:
         return key
@@ -4539,13 +4098,12 @@ def _claude_note(ok, sec=None):
 
 
 _CLAUDE_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8)
-_TR_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=6)   # 주사위·룰렛 말 번역 (명령 처리 칸과 따로)
-_EXEC_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8)   # 명령 처리 (멈춘 명령이 다음 명령을 막지 않게)
+_TR_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=6)
+_EXEC_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 EXEC_TIMEOUT_SEC = 20
 
 
 def _claude_request(stable, dynamic, messages, max_tokens):
-    """Claude 요청 내용 (진짜 대화와 미리 데우기가 똑같은 모양이어야 캐시가 맞음)."""
     req = dict(
         model=CLAUDE_MODEL,
         max_tokens=max_tokens,
@@ -4553,19 +4111,15 @@ def _claude_request(stable, dynamic, messages, max_tokens):
                 {"type": "text", "text": dynamic}],
         output_config={"effort": CLAUDE_EFFORT},
         betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",   # 안전 검사로 거절되면 서버가 알맞은 다른 모델로 다시 시도
+        fallbacks="default",
         messages=messages,
     )
-    # Sonnet 5.5는 생각을 끌 수 있음 (짧은 대화엔 생각 없이도 충분하고, 평균 2.9초 → 2.1초로 빨라짐).
-    # Opus 5.5는 생각을 못 꺼서 effort만 낮춤.
     if "sonnet-5-5" in CLAUDE_MODEL:
         req["thinking"] = {"type": "between_tools"}
     return req
 
 
 def claude_prewarm():
-    """자비스 성격 설명을 Claude 캐시에 미리 넣어 둠 (대답은 안 만듦, max_tokens=0).
-    서버를 켠 직후나 체험 모드를 켜고 끈 직후의 첫 대답이 느리지 않게 (5.9초 → 약 2초)."""
     client = _claude_client()
     if client is None:
         return
@@ -4578,19 +4132,16 @@ def claude_prewarm():
         print(f"[JARVIS] Claude 미리 준비 실패 ({type(e).__name__}). 첫 대답만 조금 느릴 수 있어요.")
 
 
-_TLS = threading.local()   # 지금 처리 중인 /execute 요청에 '먼저 말할 문장'을 보내는 통로 (say)
+_TLS = threading.local()
 _SENT_END_RE = re.compile(r"[.!?。！？~]+[\"')\]」]*\s+")
 
 
 def _pump_reply(q, say, deadline):
-    """Claude 글자를 받아 첫 문장이 끝나는 순간 say(첫 문장)로 바로 말하게 하고, 나머지는 끝나면 한 번에.
-    (문장마다 따로 보내면 목소리 요청이 늘어 오히려 느려져서 두 덩어리로만)
-    '[조용]'(사람들끼리 하는 말)이면 아무것도 말하지 않음. 말하게 한 글자를 돌려줌."""
     buf, said, first_done = "", [], False
     while True:
         left = deadline - time.time()
         if left <= 0:
-            return ""   # 너무 늦으면 원래대로(끝까지 받은 뒤) 처리
+            return ""
         try:
             d = q.get(timeout=left)
         except queue.Empty:
@@ -4605,7 +4156,7 @@ def _pump_reply(q, say, deadline):
             first = buf[:m.end()].strip()
             if _is_quiet_reply(first):
                 return ""
-            if len(first) < 6:     # '네.'처럼 너무 짧으면 다음 문장까지 붙여서
+            if len(first) < 6:
                 m2 = _SENT_END_RE.search(buf, m.end())
                 if not m2:
                     continue
@@ -4623,7 +4174,7 @@ def _pump_reply(q, say, deadline):
     return " ".join(said)
 
 
-_NET = {"fail_at": 0.0}   # 마지막으로 인터넷 연결이 끊겼던 시각 (대답을 못 만든 이유 안내용)
+_NET = {"fail_at": 0.0}
 
 
 def claude_ready():
@@ -4631,9 +4182,6 @@ def claude_ready():
 
 
 def claude_chat(user_text, add_history=True, deltas=None):
-    """Claude로 자비스 대화 대답을 만듦. 키가 없거나 실패·거절이면 None (그러면 Groq가 대답).
-    add_history=False: 받아쓰기 교정과 동시에 미리 만들어 둘 때 (실제로 쓸 때 대화 기억에 넣음).
-    deltas(큐)를 주면 대답 글자를 나오는 대로 넣고 끝나면 None을 넣음 → 첫 문장부터 바로 말할 수 있음."""
     try:
         return _claude_chat(user_text, add_history, deltas)
     finally:
@@ -4678,7 +4226,7 @@ def _claude_chat(user_text, add_history, deltas):
         return None
     except anthropic.APIStatusError as e:
         print(f"[JARVIS] Claude 오류({e.status_code}). 이번엔 Groq로 대답해요.")
-        if e.status_code in (400, 402, 403, 404):   # 잔액 부족·권한·모델 이름 문제 → 잠시 쉼
+        if e.status_code in (400, 402, 403, 404):
             _CLAUDE["off_until"] = time.time() + 300
         _claude_note(False)
         return None
@@ -4708,11 +4256,9 @@ def _claude_chat(user_text, add_history, deltas):
     return text
 
 
-# --- 체험(손님) 모드: 발표장에서 다른 사람도 자비스에게 말해 볼 수 있게 ---
-GUEST = {"on": False}         # 시간 제한 없음: 버튼 + 비밀번호로 끌 때까지 계속 켜져 있음
+GUEST = {"on": False}
 GUEST_ON_MSG = "체험 모드를 켰어요. 지금부터는 누구나 저에게 말을 걸 수 있어요. 여러분, 편하게 말씀해 주세요!"
 GUEST_PROGRAMS = {"chrome", "calculator", "notepad", "microsoft edge", "edge"}
-# 손님이 쓰면 위험하거나 보스 개인정보가 드러나는 명령 (켜는 것 자체가 위험하거나, 보스 파일·위치를 보여 줌)
 GUEST_BLOCK_RE = re.compile(
     r"(전원|재부팅|재시작|절전|잠가|잠금|잠궈|락\s*걸|셧다운|"
     r"꺼\s*(줘|봐|버려|주세요|라|$)|꺼$|(컴퓨터|노트북|전원|화면|크롬|프로그램|자비스)\s*(좀\s*)?꺼|끄(고|자|기|면|세요|라|십|는\s*법)|끌\s*(래|게|까)|"
@@ -4728,8 +4274,6 @@ def guest_on():
 
 
 def scrub_boss_name(text, to="보스"):
-    """체험 모드: 대답에서 보스의 이름·닉네임을 '보스'로 바꿈.
-    닉네임(profile.json)은 흔한 단어와 겹칠 수 있어서, 이름처럼 쓰인 경우(…님, …가 만든)만 바꿈."""
     text = text or ""
     for secret in BOSS_SECRET_NAMES:
         text = re.sub(re.escape(secret) + r"\s*(님|씨)?", to, text)
@@ -4738,22 +4282,23 @@ def scrub_boss_name(text, to="보스"):
         text = re.sub(re.escape(nm) + r"\s*(님|씨)", to, text)
         text = re.sub(r"(?<![가-힣])(?<!어느 )(?<!이 )(?<!그 )(?<!저 )(?<!얼마 )(?<!몇 )(?<!약 )" + re.escape(nm)
                       + r"(?=(이가|가|는|의|를|에게|한테|와|랑)(?![가-힣]))", to, text)
-    if to == "보스":   # 받침 있는 이름 뒤 조사를 '보스'에 맞게 (보스이 → 보스가, 보스은 → 보스는)
+    if to == "보스":
         fix = {"이에요": "예요", "이야": "야", "이랑": "랑", "이가": "가", "이": "가", "은": "는", "을": "를", "과": "와"}
         text = re.sub(r"보스(이에요|이야|이랑|이가|이|은|을|과)(?![가-힣])", lambda m: "보스" + fix[m.group(1)], text)
     return text
 
 
 def scrub_affiliation(text):
-    """체험 모드: 보스의 소속(학교·학과·학년)을 대답에서 지움."""
     text = text or ""
+    rep = BOSS_AFFILIATION_REPLACE
     for pat in BOSS_AFFILIATION_PATTERNS:
-        text = pat.sub("학생", text)
-    return re.sub(r"학생\s*학생", "학생", text)
+        text = pat.sub(rep, text)
+    if rep:
+        text = re.sub(re.escape(rep) + r"\s*" + re.escape(rep), rep, text)
+    return text
 
 
 def guest_program_ok(key, path):
-    """체험 모드에서 열어도 되는 프로그램인지 (시작 메뉴 이름이 '메모장'·'계산기'처럼 한국어여도 알아봄)"""
     k = (key or "").lower()
     if k in GUEST_PROGRAMS or PROGRAM_ALIASES.get(k) in GUEST_PROGRAMS:
         return True
@@ -4763,24 +4308,21 @@ def guest_program_ok(key, path):
 
 
 def _guest_allowed_target(path):
-    """체험 모드에서 열어도 되는 실제 대상: 크롬·계산기·메모장·엣지의 실행 파일·바로가기(.lnk)·스토어 앱만.
-    (예전엔 'chrome.exe'만 알아봐서 시작 메뉴 바로가기 'Chrome.lnk'로 여는 크롬을 막아 버렸음)"""
     p = str(path or "").lower()
     if p.startswith(UWP_PREFIX.lower()):
         return bool(re.search(r"(windowscalculator|windowsnotepad|microsoftedge)", p))
     base = os.path.basename(p)
     if not base.endswith((".lnk", ".exe")):
-        return False   # 폴더·문서 파일은 안 됨
+        return False
     return bool(re.search(r"^(google\s*)?chrome|^calc|^notepad|^msedge|^microsoft\s*edge|계산기|메모장|크롬|엣지", base))
 
 
-GUEST_PW_FILE = os.path.join(BASE_DIR, "guest_password.json")   # 비밀번호는 해시로만 저장
+GUEST_PW_FILE = os.path.join(BASE_DIR, "guest_password.json")
 def _pw_hash(password, salt_hex):
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), 200000).hex()
 
 
 def guest_password_ok(password):
-    """체험 모드 끄기 비밀번호 확인. 결과: 'ok' | 'wrong' | 'none'"""
     try:
         with open(GUEST_PW_FILE, "r", encoding="utf-8") as f:
             d = json.load(f)
@@ -4796,11 +4338,10 @@ def guest_set(on):
     with _CHAT_HISTORY_LOCK:
         _GUEST_HISTORY.clear()
     print(f"[JARVIS] 체험 모드를 {'켰어요. 끌 때까지 누구 목소리든 들어요.' if on else '껐어요. 다시 보스 모드예요.'}")
-    _CLAUDE_POOL.submit(claude_prewarm)   # 체험/보스 모드는 지시문이 달라서 그 모드 것으로 미리 준비
+    _CLAUDE_POOL.submit(claude_prewarm)
 
 
 def try_guest_mode(cmd):
-    """체험 모드는 화면 버튼으로만 켜고, 끌 때는 버튼 + 비밀번호. 말로는 안내만."""
     if not re.search(r"(체험|손님|게스트)\s*모드", cmd):
         return None
     if re.search(r"(꺼|끄|끝|종료|해제|off|그만)", cmd, re.I):
@@ -4810,12 +4351,11 @@ def try_guest_mode(cmd):
 
 
 _GUEST_LANG_IDLE_SEC = 120
-_GUEST_LANG_MAX_SEC = 120   # 체험 모드: 외국어로 바꾼 지 2분 지나면 한국어로 (시끄러워 '한국어로'를 못 알아들어도 돌아옴)
+_GUEST_LANG_MAX_SEC = 120
 _LAST_CMD_AT = {"t": 0.0}
 
 
 def interpret_command(raw_command):
-    # 체험 모드: 앞 방문객이 '영어로 대답해'로 바꿔 두고 갔으면, 2분 동안 조용했을 때 한국어로 돌려 둠
     now = time.time()
     if guest_on() and reply_lang() != "ko" and (now - _LAST_CMD_AT["t"] > _GUEST_LANG_IDLE_SEC
                                                  or now - _LANG_SET_AT["t"] > _GUEST_LANG_MAX_SEC):
@@ -4838,7 +4378,6 @@ def interpret_command(raw_command):
     if guest_on() and GUEST_BLOCK_RE.search(raw_command) and not GUEST_ALLOW_RE.search(raw_command):
         return {"reply": "죄송해요, 보스. 그건 체험 모드에서는 할 수 없어요. 퀴즈나 날씨, 번역, 가위바위보 같은 걸 해 보세요!",
                 "action": "info", "matched": "guest_blocked"}
-    # 음소거돼 있으면 자비스 대답도 안 들림 → 음소거가 아닌 다른 말을 걸면 소리를 다시 켬
     if not RE_MUTE.search(raw_command) and system_muted():
         set_system_mute(False)
         print("[JARVIS] 컴퓨터가 음소거돼 있어서 대답이 들리도록 소리를 다시 켰어요.")
@@ -4853,10 +4392,8 @@ def interpret_command(raw_command):
                        or (result.get("action") == "system" and result.get("matched") not in ("mute", "unmute", "volume_up", "volume_down"))):
         result = {"reply": "죄송해요, 보스. 그건 체험 모드에서는 할 수 없어요. 날씨나 음악, 번역, 자기소개 같은 걸 해 보세요!",
                   "action": "info", "matched": "guest_blocked"}
-    # 체험 모드: 보스의 이름·닉네임이 대답에 새어 나가지 않게 '보스'로 바꿈
     if guest_on() and result.get("reply"):
         result["reply"] = scrub_boss_name(result["reply"])
-        # 소속도 지움 (단, 방문객이 직접 학교 이름을 말해서 검색한 경우는 그대로)
         if not (BOSS_AFFILIATION_WORDS and BOSS_AFFILIATION_WORDS.search(raw_command)):
             result["reply"] = scrub_affiliation(result["reply"])
         if result.get("speak_parts"):
@@ -4869,7 +4406,6 @@ def interpret_command(raw_command):
                                                                                "intro_lang", "intro_multi"):
         anim = next((c for c in (result.get("cards") or []) if c.get("say_before")), None)
         if anim:
-            # 주사위·룰렛: 화면은 '굴립니다'(바로) + 결과(멈춘 뒤)를 따로 말함 → 둘 다 그 언어로 (동시에 번역)
             parts = [anim["say_before"], anim["say_after"]] + [anim.get("title") or ""]
             futs = [_TR_POOL.submit(translate_text, t, code) if t else None for t in parts]
             out = []
@@ -4884,14 +4420,14 @@ def interpret_command(raw_command):
                 result["reply"] = out[0] + " " + out[1]
             if out[2]:
                 anim["title"] = out[2]
-        elif result.get("action") != "chat":   # 규칙 대답(날씨 등)은 번역해서 (대화 AI는 이미 그 언어로 답함)
+        elif result.get("action") != "chat":
             tr = translate_text(result["reply"], code)
             if tr:
                 result["reply"] = tr
         result["speak_parts"] = [{"text": result["reply"], "lang": code}]
     try:
         if result.get("action") not in ("chat", "none", "error") and result.get("reply"):
-            _chat_history_add(raw_command, result["reply"])   # 예: 날씨 답 → "우산 챙길까?"에 활용
+            _chat_history_add(raw_command, result["reply"])
     except Exception:
         pass
     return result
@@ -4909,8 +4445,6 @@ QUICK_REPLIES = [
 
 
 def groq_fix_transcript(text):
-    """받아쓰기가 잘못 들은 말을 앞뒤 대화를 보고 바로잡음. (예: '오늘 날 살려줘' → '오늘 날씨 알려줘',
-    날씨 얘기 뒤 '소산소 걸까' → '우산 쓸까') 확실하지 않으면 그대로 돌려줌."""
     hist = _chat_history_snapshot()[-2:]
     ctx = "\n".join(f"보스: {h['user']}\n자비스: {h['assistant'][:80]}" for h in hist) or "(없음)"
     out = _groq_request([
@@ -4927,12 +4461,8 @@ def groq_fix_transcript(text):
         model=GROQ_FIX_MODEL)
     out = (out or "").strip().strip('"').strip()
     out = re.sub(r"^(고친\s*문장|교정|출력)\s*[:：]\s*", "", out)
-    # 지나치게 달라지면(새로 지어낸 것) 버림
     if not out or len(out) > len(text) * 2 + 10 or "\n" in out:
         return text
-    # 발음이 비슷하지 않으면 버림 (예전엔 '계산기에서 상 곱하기 7은 써줘'를 앞 대화의 '메가코피 찾아줘'로 바꿨음)
-    # 바뀐 단어끼리도 발음이 비슷해야 함 (예전엔 '폴더 열어줘'를 '크롬 열어줘'로 바꿔 크롬이 열렸음)
-    # 켜기↔끄기처럼 뜻이 반대로 바뀌는 교정도 쓰지 않음
     off_re = r"(꺼|끄|끌|닫|종료|멈춰|그만)"
     if _sound_similarity(text, out) < 0.55 or _changed_words_similarity(text, out) < 0.5 \
             or bool(re.search(off_re, text)) != bool(re.search(off_re, out)):
@@ -4942,7 +4472,6 @@ def groq_fix_transcript(text):
 
 
 def _changed_words_similarity(a, b):
-    """교정 전후에 바뀐 단어들끼리의 발음 비슷함 중 가장 낮은 값 (바뀐 게 없으면 1)."""
     ta = re.findall(r"[^\s.,!?~…'\"]+", a or "")
     tb = re.findall(r"[^\s.,!?~…'\"]+", b or "")
     worst = 1.0
@@ -4956,7 +4485,6 @@ def _changed_words_similarity(a, b):
 
 
 def _sound_similarity(a, b):
-    """두 문장의 발음이 얼마나 비슷한지 (한글을 자음·모음으로 풀어서 비교, 0~1)."""
     ja = unicodedata.normalize("NFD", re.sub(r"[\s.,!?~…'\"]", "", a or ""))
     jb = unicodedata.normalize("NFD", re.sub(r"[\s.,!?~…'\"]", "", b or ""))
     return difflib.SequenceMatcher(None, ja, jb).ratio()
@@ -4969,7 +4497,6 @@ _NEG_RE = re.compile(r"(수\s*(는|가|도)?\s*없|못\s*(해|하|했|하겠)|�
 
 
 def fix_claims(text):
-    """대화 AI는 아무것도 실행할 수 없는데 '열어 드릴게요'라고 한 문장 → 다시 또렷하게 말해 달라는 문장으로."""
     out, changed = [], False
     for sent in re.split(r"(?<=[.!?。！？])\s+", text or ""):
         offer = re.search(r"(까요|할래요|드릴지|[?？]\s*$)", sent) or re.search(r"(시면|하면|말씀하시|이라고\s*하|라고\s*해\s*주)", sent)
@@ -4986,29 +4513,21 @@ _DID_ACTION_ASK_RE = re.compile(r"(열어|켜|실행|틀어|맞춰|띄워|꺼|�
 
 
 def _interpret_command_inner(raw_command):
-    """서버 /execute 핸들러 전용 진입점. parse_command()(규칙 기반)를 우선 사용하고,
-    "이해 못함"/복합 문장이면 LLM(Ollama/Gemini)으로 문장을 쪼개 다시 넣어봅니다.
-    그래도 명령이 아니면(순수 대화면) 자비스가 대화로 응답합니다."""
-    # 여러 명령('계산기 켜고 크롬 열어줘')은 먼저 나눠서 하나씩 한 번만 실행.
-    # (예전엔 문장 전체를 먼저 실행해 본 뒤 나눠서 또 실행해서, 계산기가 두 번 열렸음)
     tried_split = False
     if _looks_compound(raw_command) and not _NESTED_RE.search(raw_command):
         tried_split = True
         subs = (_rule_split_command(raw_command) or llm_split_command(raw_command)
                 or groq_split_command(raw_command) or (gemini_split_command(raw_command) if not groq_key() else None))
         if subs and len(subs) >= 2:
-            # 언어 바꾸기('영어로 대답해')는 그 말만 따로 했을 때만 (주변 말이 섞여 바뀌는 걸 막음)
-            def _is_lang_switch(c):   # '영어로 대답해' (번역 '사랑해를 영어로 말해줘'는 아님)
+            def _is_lang_switch(c):
                 return bool(find_lang(c)[0] and re.search(r"(으로|로)\s*(만\s*)?(대답|말해|얘기)", c)
                             and not re.search(r"(을|를)\s|번역", c))
             subs = [c for c in subs if not _is_lang_switch(c)] or subs[:1]
             results = [parse_command(c) for c in subs]
             understood = [r for r in results if r["action"] not in ("none", "error")]
             missed = sum(1 for c, r in zip(subs, results) if r["action"] == "none" and _BARE_REQUEST_RE.match(c))
-            # '자비스? 크롬 열어줘' → '네, 말씀하세요'는 빼고 크롬만
             if len(understood) >= 2:
                 understood = [r for r in understood if r.get("matched") != "wake"] or understood[:1]
-            # '너 누구야? 날씨 알려줘'처럼 질문이 섞여 있으면 그 질문은 대화로 대답해서 같이 말함
             if understood and CONVERSATION_ENABLED and claude_ready():
                 for c, r in zip(subs, results):
                     if r["action"] == "none" and re.search(r"[?？]$", c) and len(c) >= 4:
@@ -5016,7 +4535,7 @@ def _interpret_command_inner(raw_command):
                         if ans and not _is_quiet_reply(ans):
                             understood.append({"reply": ans, "action": "chat", "matched": None})
             if len(understood) == 1:
-                if missed:   # '알려줘, 노래 틀어줘' → 앞말이 안 들렸다고 알려 줌
+                if missed:
                     return dict(understood[0], reply=understood[0]["reply"] + " 앞에 하신 말은 잘 못 들었어요. 한 번 더 말씀해 주세요.")
                 return understood[0]
             if understood:
@@ -5029,7 +4548,6 @@ def _interpret_command_inner(raw_command):
     if primary["action"] != "none":
         return primary
 
-    # 시끄러워 동사가 뭉개진 부탁: '크롬 하나만 올려줄래?', '계산기 전화죠' → 앱 이름이 또렷하면 그 앱을 엶
     am = re.search(r"(크롬|계산기|메모장|엣지|유튜브)", raw_command)
     if am and len(raw_command) <= 20 and re.search(r"(줘|줄래|죠|봐|주세요|해요|할래)\s*[?.!~]*$", raw_command) \
             and not re.search(r"(꺼|끄|닫|종료|지워|삭제|뭐|왜|어때|좋아|싫어|알아|누구)", raw_command):
@@ -5038,17 +4556,14 @@ def _interpret_command_inner(raw_command):
             print(f"[JARVIS] 말이 뭉개졌지만 '{am.group(1)}' 열어 달라는 말로 봤어요: {raw_command}")
             return again
 
-    # 명령이 아니면 대화가 될 가능성이 커서, 받아쓰기 교정(Groq)을 기다리지 않고 Claude 대답을 미리 시작함.
-    # 교정해 보니 명령이었으면 미리 만든 대답은 버림 (대화 기억에도 안 넣음).
     chat_text = raw_command
     claude_future = None
     stream_q = queue.Queue() if getattr(_TLS, "say", None) else None
     if primary["action"] == "none" and CONVERSATION_ENABLED and claude_ready():
         claude_future = _CLAUDE_POOL.submit(claude_chat, raw_command, False, stream_q)
 
-    # 규칙으로 못 알아들었으면: 받아쓰기 실수일 수 있으니 먼저 바로잡아서 다시 시도
     if primary["action"] == "none" and groq_ai_on() and len(raw_command) <= 30 and not _groq_blocked(GROQ_FIX_MODEL):
-        try:   # 인터넷이 느릴 때 오래 붙잡히지 않게 최대 2초만 기다림
+        try:
             fixed = _CLAUDE_POOL.submit(groq_fix_transcript, raw_command).result(timeout=2.0)
         except Exception:
             fixed = None
@@ -5057,16 +4572,13 @@ def _interpret_command_inner(raw_command):
             again = parse_command(fixed)
             if again["action"] != "none":
                 return again
-            raw_command = fixed   # 대화로 가더라도 바로잡은 문장으로
+            raw_command = fixed
 
-    # 명령 해석: 로컬 Ollama → Groq → (Groq 키가 없을 때만) Gemini.
-    # Groq 키가 있으면 Gemini는 아예 부르지 않습니다 (막힌 Gemini의 실패 로그 방지).
     use_gemini = not groq_key()
-    # 질문/잡담처럼 보이는 말은 "명령 분해"를 건너뛰어 Groq 호출을 한 번 아낍니다.
     looks_chatty = bool(re.search(r"(소개|설명해|뭐|무엇|어때|어떻|왜|누구|언제|어디|재밌|심심|안녕|고마|사랑|\?|？)", raw_command)) \
         and not _ACTION_RE.search(normalize_command(raw_command)) and not _looks_compound(raw_command)
     if looks_chatty or tried_split or not _looks_compound(raw_command):
-        sub_commands = None   # 한 가지 말이면 쪼갤 필요 없음 (AI 호출 한 번 아껴서 대답이 빨라짐)
+        sub_commands = None
     else:
         sub_commands = (_rule_split_command(raw_command)
                         or llm_split_command(raw_command)
@@ -5085,17 +4597,13 @@ def _interpret_command_inner(raw_command):
                 "cards": [c for c in (r.get("card") or _card_for(r) for r in understood) if c],
             }
 
-    # 여기까지 왔으면 명령으로 해석되지 않은 말입니다.
-    # 규칙 엔진이 뭔가 매칭했었다면(복합 문장 케이스) 그 결과를 그대로 씁니다.
     if primary["action"] != "none":
         return primary
 
-    # 순수 대화 → 자비스가 대화로 응답합니다 (Groq 우선, Groq 키 없을 때만 Gemini).
     if CONVERSATION_ENABLED:
         reply = None
         said = ""
         if claude_future is not None:
-            # '열었어요'처럼 하지도 않은 일을 말할 수 있는 부탁(열어/켜…)은 끝까지 보고 고칠 수 있게 미리 말하지 않음
             say = getattr(_TLS, "say", None)
             if say and stream_q is not None and not _DID_ACTION_ASK_RE.search(raw_command):
                 said = _pump_reply(stream_q, say, time.time() + CLAUDE_TIMEOUT_SEC + 1)
@@ -5108,7 +4616,6 @@ def _interpret_command_inner(raw_command):
         else:
             reply = claude_chat(raw_command)
         reply = reply or groq_chat(raw_command) or (gemini_chat(raw_command) if use_gemini else None)
-        # 대화 AI는 아무것도 실행할 수 없는데 '열었어요/켰어요'라고 지어내면 솔직한 대답으로 바꿈
         if reply and _DID_ACTION_ASK_RE.search(raw_command) and \
                 re.search(r"(열었|열겠|열어\s*드[렸릴]|켰|켜\s*드[렸릴]|켜겠|실행했|실행하겠|시작했|맞췄|"
                           r"맞춰\s*드[렸릴]|틀었|틀어\s*드[렸릴]|띄웠|띄워\s*드[렸릴]|껐|끄겠|종료했|검색했|찾아\s*드렸|"
@@ -5116,20 +4623,18 @@ def _interpret_command_inner(raw_command):
                 not re.search(r"(수\s*(는|가|도)?\s*없|못\s*(해|하|했|하겠)|없어요|안\s*돼)", reply):
             reply = "그건 제가 바로 할 수 없었어요. 'OO 열어줘'처럼 짧게 다시 말씀해 주시겠어요?"
         if reply and not _is_quiet_reply(reply):
-            reply = fix_claims(reply)   # 먼저 말한 문장과 같게
+            reply = fix_claims(reply)
         if reply and _is_quiet_reply(reply):
             print(f"[JARVIS] 주변 사람끼리 하는 말 같아서 대답하지 않았어요: {raw_command[:40]}")
             return {"reply": "", "action": "none", "matched": "chatter"}
         if reply:
             out = {"reply": reply, "action": "chat", "matched": None}
             if said and claude_future is not None and reply.startswith(said.split(" ")[0]):
-                out["spoken"] = True   # 화면이 이미 문장별로 말했음 (다시 말하지 않게)
+                out["spoken"] = True
             return out
-        # AI가 잠깐 막혔어도 흔한 말에는 바로 대답
         for pat, ans in QUICK_REPLIES:
             if re.search(pat, raw_command):
                 return {"reply": ans, "action": "chat", "matched": "quick"}
-        # 답을 못 만든 이유가 '분당 한도(잠깐)'이면, 못 알아들은 척하지 말고 자연스럽게 안내.
         if time.time() - _NET["fail_at"] < 60:
             return {"reply": "인터넷 연결이 잠깐 불안정해서 대화가 어려워요. 그동안 크롬이나 계산기 열기, 계산, 퀴즈, 가위바위보는 할 수 있어요!",
                     "action": "info", "matched": "offline"}
@@ -5140,23 +4645,13 @@ def _interpret_command_inner(raw_command):
     return primary
 
 
-# ---------------------------------------------------------------------------
-# 화자 인증: 보스 목소리를 등록해 두고, 다른 사람 목소리는 Whisper로 보내기 전에 거릅니다.
-# (목소리 데이터는 이 컴퓨터 밖으로 나가지 않습니다)
-# ---------------------------------------------------------------------------
-# 한국어 목소리 구별용 모델: 3D-Speaker CAM++ (중국어+영어 20만 명 이상으로 학습한 고급형).
-# 예전 모델(영어 VoxCeleb 전용)은 한국어에서 같은 사람/다른 사람 점수가 똑같이 나와 거의 구별을 못 했습니다.
 SPEAKER_MODEL_ID = "campplus_zh_en_adv"
 SPEAKER_MODEL_FILE = os.path.join(BASE_DIR, "speaker_model_v2.onnx")
 SPEAKER_MODEL_URL = ("https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
                      "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx")
-VOICE_SAMPLES_DIR = os.path.join(BASE_DIR, "voice_samples")   # 등록 녹음 원본 (모델을 바꿔도 다시 녹음할 필요 없게)
+VOICE_SAMPLES_DIR = os.path.join(BASE_DIR, "voice_samples")
 VOICEPRINT_FILE = os.path.join(BASE_DIR, "voiceprint.json")
-# 목소리 일치 점수(0~1)가 이보다 낮으면 다른 사람으로 보고 무시합니다.
-# 보스 목소리도 자주 무시되면 낮추고(예: 0.5), 다른 사람에게 자꾸 반응하면 올리세요(예: 0.7).
 SPEAKER_THRESHOLD = float(os.environ.get("JARVIS_SPEAKER_THRESHOLD", "0.6"))
-# 목소리 확인(등록한 보스 목소리에만 반응) 사용 여부. 보스 요청으로 꺼 둠: 보스 모드도 체험 모드처럼 들어요.
-# 등록한 목소리 자료는 그대로 두므로, 다시 쓰려면 환경변수 JARVIS_SPEAKER_CHECK=1 로 켜면 돼요.
 SPEAKER_CHECK = os.environ.get("JARVIS_SPEAKER_CHECK", "0") == "1"
 SPK_THRESHOLD_FILE = os.path.join(BASE_DIR, "speaker_threshold.json")
 
@@ -5176,13 +4671,11 @@ def _save_spk_threshold():
             json.dump({"threshold": SPEAKER_THRESHOLD}, f)
     except Exception:
         pass
-ENROLL_MAX = 24   # 장소별로 여러 번 쌓을 수 있게 (최근 24개를 평균)
+ENROLL_MAX = 24
 _SPK = {"ex": None, "samples": [], "mean": None, "live": []}
-# 실제로 명령할 때 녹음에서 배운 목소리 (등록은 조용히 문장을 읽어서, 평소 명령할 때와 점수가 달랐음).
-# 등록한 목소리로 이미 보스라고 확인된 녹음만 배우므로, 다른 사람 목소리로 번지지 않음.
 LIVE_MAX = 8
-LIVE_LEARN_MIN = 0.48      # 등록한 목소리와 이 점수 이상일 때만 배움 (다른 사람은 보통 0.4도 안 나옴)
-TRUST_SEC = 20             # 보스라고 확인된 뒤 이 시간 동안은 이어지는 말의 기준을 조금 낮춤
+LIVE_LEARN_MIN = 0.48
+TRUST_SEC = 20
 TRUST_DROP = 0.08
 _SPK_TRUST = {"until": 0.0}
 _SPK_LOAD_LOCK = threading.Lock()
@@ -5223,7 +4716,6 @@ def _unit(v):
 
 
 def speaker_embedding(wav_bytes):
-    """오디오에서 목소리 특징(지문) 벡터를 뽑습니다. 너무 짧거나 실패하면 None."""
     ex = _spk_extractor()
     if ex is None:
         return None
@@ -5259,7 +4751,6 @@ def _load_voiceprint():
         _SPK["live"] = data.get("live", [])[-LIVE_MAX:]
     else:
         _SPK["live"] = []
-        # 모델이 바뀜 → 저장해 둔 등록 녹음이 있으면 새 모델로 다시 계산, 없으면 새로 등록 필요
         _SPK["samples"] = []
         wavs = sorted(glob.glob(os.path.join(VOICE_SAMPLES_DIR, "*.wav")))[-ENROLL_MAX:]
         for p in wavs:
@@ -5279,7 +4770,6 @@ def _load_voiceprint():
 
 
 def _prune_outliers():
-    """다른 등록 녹음들과 전혀 안 맞는 녹음(잡음·자비스 목소리가 섞인 것)은 빼고 씁니다."""
     smp = _SPK["samples"]
     if len(smp) < 4:
         return
@@ -5310,11 +4800,10 @@ def enroll_sample(wav_bytes):
     emb = speaker_embedding(wav_bytes)
     if emb is None:
         return None
-    # 이미 등록된 목소리와 너무 다르면(다른 사람·자비스 목소리·잡음) 등록하지 않음
     if _SPK["mean"] is not None and len(_SPK["samples"]) >= 2:
         if sum(a * b for a, b in zip(emb, _SPK["mean"])) < 0.4:
             return -1
-    try:   # 원본 녹음도 보관 (나중에 모델을 바꿔도 자동으로 다시 계산)
+    try:
         os.makedirs(VOICE_SAMPLES_DIR, exist_ok=True)
         with open(os.path.join(VOICE_SAMPLES_DIR, time.strftime("enroll_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6] + ".wav"), "wb") as wf:
             wf.write(wav_bytes)
@@ -5347,7 +4836,6 @@ LISTEN_LOG = os.path.join(BASE_DIR, "listen_log.txt")
 
 
 def _log_listen(dur, score, text, why):
-    """들은 것마다 결과를 남깁니다 (못 알아들었을 때 원인 찾기용, 글자만 저장). 최근 500줄만 남김."""
     try:
         mode = "체험" if guest_on() else "보스"
         sc = "-" if score is None else f"{score:.2f}"
@@ -5365,7 +4853,6 @@ def _log_listen(dur, score, text, why):
 
 
 def _log_speaker(dur, score, need):
-    """목소리 판정 기록 (기준을 맞출 때 참고). 최근 500줄만 남김."""
     try:
         line = f"{time.strftime('%m-%d %H:%M:%S')}\t{dur:.1f}s\t{score if score is None else round(score, 2)}\t" \
                f"기준 {need:.2f}\t{'통과' if score is None or score >= need else '무시'}\n"
@@ -5382,7 +4869,6 @@ def _log_speaker(dur, score, need):
 
 def _enrolled_score(emb):
     centroid = sum(a * b for a, b in zip(emb, _SPK["mean"]))
-    # 집·교실처럼 장소별로 '추가 등록'해 두면, 지금 장소와 비슷한 녹음끼리 비교한 점수도 봄
     sims = sorted((sum(a * b for a, b in zip(emb, v)) for v in _SPK["samples"]), reverse=True)
     if len(sims) >= 6:
         return max(centroid, sum(sims[:3]) / 3)
@@ -5390,7 +4876,6 @@ def _enrolled_score(emb):
 
 
 def speaker_check(wav_bytes):
-    """(최종 점수, 등록 목소리만으로 본 점수, 목소리 특징). 판단할 수 없으면 (None, None, None)."""
     if not voiceprint_ready():
         return None, None, None
     emb = speaker_embedding(wav_bytes)
@@ -5405,24 +4890,20 @@ def speaker_check(wav_bytes):
 
 
 def speaker_score(wav_bytes):
-    """등록된 보스 목소리와의 일치 점수(0~1). 판단할 수 없으면 None."""
     return speaker_check(wav_bytes)[0]
 
 
 def learn_live_voice(emb):
-    """보스라고 확인된 실제 명령 녹음의 목소리를 배워 둠 (최근 LIVE_MAX개)."""
     _SPK["live"] = (_SPK["live"] + [emb])[-LIVE_MAX:]
     _save_voiceprint()
 
 
 def _detect_lang(text):
-    """텍스트에 한글이 더 많으면 'ko', 영문 알파벳이 더 많으면 'en'."""
     ko = sum(1 for c in text if "가" <= c <= "힣")
     en = sum(1 for c in text if c.isascii() and c.isalpha())
     return "en" if en > ko else "ko"
 
 
-# 같은 문장은 다시 만들지 않고 저장해 둔 소리를 씀 (Microsoft가 요청이 많으면 잠시 막기 때문)
 TTS_CACHE_DIR = os.path.join(BASE_DIR, "tts_cache")
 TTS_CACHE_MAX = 400
 _TTS_BLOCK = {"until": 0.0}
@@ -5449,12 +4930,10 @@ def _tts_voice(text, lang):
     return EDGE_VOICE_OTHER.get(lang) or (EDGE_VOICE_EN if _detect_lang(text) == "en" else EDGE_VOICE_KO)
 
 
-# 목소리가 소리를 못 만들 때 대신 쓸 같은 나라 목소리
 _TTS_ALT_VOICE = {"vi-VN-NamMinhNeural": "vi-VN-HoaiMyNeural"}
 
 
 def _tts_segments(text):
-    """말할 내용을 문장 단위로 나눔. 너무 짧은 문장은 다음 문장과 붙임 (요청 수가 너무 많아지지 않게)."""
     parts = [p.strip() for p in re.split(r"(?<=[.!?。！？])\s+", text) if p.strip()]
     segs = []
     for p in parts:
@@ -5466,8 +4945,6 @@ def _tts_segments(text):
 
 
 def stream_tts(text, lang, write):
-    """목소리를 Microsoft에서 받는 대로 바로 write(조각)로 넘김 (끝까지 기다리지 않아서 말이 빨리 시작됨).
-    이미 만든 적 있는 문장은 저장해 둔 것을 바로 보냄. 성공하면 True."""
     text = (text or "").strip()
     if not HAVE_EDGE_TTS or not text:
         return False
@@ -5486,13 +4963,11 @@ def stream_tts(text, lang, write):
     segs = _tts_segments(text)
 
     async def _try(seg, q):
-        """문장 하나를 만들어 조각이 나오는 대로 q에 넣음. 소리를 만들었으면 True.
-        Microsoft가 가끔 소리를 안 보내 줌(NoAudioReceived, 베트남어에서 자주) → 설정·목소리를 바꿔 다시."""
         got = False
         styled = {"rate": EDGE_RATE, "pitch": EDGE_PITCH}
         tries = [(voice, styled), (voice, {})]
         alt = _TTS_ALT_VOICE.get(voice)
-        if alt:   # 같은 나라의 다른 목소리 (베트남어는 문장에 따라 한쪽 목소리만 되는 경우가 있음)
+        if alt:
             tries += [(alt, {}), (alt, styled)]
         for v, kw in tries:
             agen = edge_tts.Communicate(seg, v, **kw).stream()
@@ -5505,11 +4980,9 @@ def stream_tts(text, lang, write):
             except _asyncio.CancelledError:
                 raise
             except Exception:
-                if got:      # 이미 소리를 일부 보냈으면 다시 하지 않음 (같은 말이 두 번 나오지 않게)
+                if got:
                     raise
             finally:
-                # 화면이 말을 끊으면(⏹/다음 말) 여기로 취소가 옴 → Microsoft 연결을 꼭 닫음
-                # (안 닫으면 'Unclosed client session' 경고가 쌓임)
                 try:
                     await agen.aclose()
                 except Exception:
@@ -5517,7 +4990,6 @@ def stream_tts(text, lang, write):
         return got
 
     async def _one(seg, q):
-        """문장 하나 (끝나면 None). 다 실패하면 쉼표마다 잘라서 조각씩 다시 (짧을수록 잘 됨)."""
         try:
             if not await _try(seg, q):
                 pieces = [x.strip() for x in re.split(r"(?<=[,，、])\s*", seg) if x.strip()]
@@ -5528,8 +5000,6 @@ def stream_tts(text, lang, write):
             await q.put(None)
 
     async def _gen():
-        # 목소리에 따라(예: 현수) 만드는 속도가 말하는 속도와 비슷해서, 한 번에 만들면 말하다 멈칫할 수 있음.
-        # 문장별로 나눠 동시에(최대 3개) 만들고, 앞 문장부터 차례로 보냄 → 첫 소리가 빠르고 중간에 안 끊김.
         sem = _asyncio.Semaphore(3)
         queues = [_asyncio.Queue() for _ in segs]
 
@@ -5565,8 +5035,7 @@ def stream_tts(text, lang, write):
 
 
 def prewarm_tts():
-    """발표 때 자주 쓰는 문장의 목소리를 서버를 켤 때 미리 만들어 둠 → 발표 중엔 기다림 없이 바로 말함"""
-    time.sleep(8)   # 서버가 먼저 뜨고 나서 천천히
+    time.sleep(8)
     lines = [intro_text(INTRO_FULL), intro_text(INTRO_SHORT), intro_text(INTRO_GREET), BOSS_INTRO, BOSS_INTRO_GUEST,
              "네, 보스. 말씀하세요.", "발표 모드를 켰어요. 이제 자비스라고 불러 주실 때만 대답할게요.",
              "발표 모드를 껐어요. 이제 그냥 말씀하셔도 바로 대답할게요.",
@@ -5574,7 +5043,6 @@ def prewarm_tts():
              "체험 모드를 껐어요. 이제 다시 보스 모드예요.",
              "죄송해요, 보스. 그건 체험 모드에서는 할 수 없어요. 날씨나 음악, 번역, 자기소개 같은 걸 해 보세요!",
              "스피커 시험 중입니다. 제 목소리가 잘 들리시나요, 보스?"]
-    # 체험 모드용 소개(이름 없이)도
     lines += [intro_text_guest(INTRO_FULL), intro_text_guest(INTRO_SHORT), intro_text_guest(INTRO_GREET)]
     made = 0
     for line in dict.fromkeys(lines):
@@ -5582,19 +5050,15 @@ def prewarm_tts():
         if not os.path.exists(_tts_cache_path(voice, line)):
             if stream_tts(line, "ko", lambda _d: None):
                 made += 1
-            time.sleep(1.0)   # Microsoft 서버에 한꺼번에 몰리지 않게
+            time.sleep(1.0)
     if made:
         print(f"[JARVIS] 발표용 문장 목소리 {made}개를 미리 만들어 뒀어요.")
 
 
 def edge_tts_audio(text, lang="ko"):
-    """edge-tts로 텍스트를 mp3 오디오(bytes)로 만듭니다. 미설치/실패면 None을 돌려주고
-    브라우저가 내장 음성으로 폴백합니다. 영어 문장이면 영국식 남성, 한국어면 한국어 남성."""
     text = (text or "").strip()
     if not HAVE_EDGE_TTS or not text:
         return None
-    # 넘어온 lang과 상관없이, 실제 글자를 보고 언어를 판별해 목소리를 고릅니다.
-    # (영어 문장을 한국어 목소리로 읽는 문제 방지)
     voice = EDGE_VOICE_OTHER.get(lang) or (EDGE_VOICE_EN if _detect_lang(text) == "en" else EDGE_VOICE_KO)
     cache = _tts_cache_path(voice, text)
     if os.path.exists(cache):
@@ -5604,7 +5068,7 @@ def edge_tts_audio(text, lang="ko"):
         except Exception:
             pass
     if time.time() < _TTS_BLOCK["until"]:
-        return None   # 잠시 막힌 동안엔 계속 두드리지 않음 (화면은 브라우저 목소리로 대신 말함)
+        return None
 
     async def _gen():
         communicate = edge_tts.Communicate(text, voice, rate=EDGE_RATE, pitch=EDGE_PITCH)
@@ -5629,24 +5093,20 @@ def edge_tts_audio(text, lang="ko"):
         return None
 
 
-# ---------------------------------------------------------------------------
-# 핸드폰 연결 (https + 로그인)
-# ---------------------------------------------------------------------------
 PHONE_CERT = os.path.join(BASE_DIR, "phone_cert.pem")
 PHONE_KEY = os.path.join(BASE_DIR, "phone_key.pem")
-PHONE_SESSIONS_FILE = os.path.join(BASE_DIR, "phone_sessions.json")   # 로그인 기록 (토큰은 해시로만 저장)
+PHONE_SESSIONS_FILE = os.path.join(BASE_DIR, "phone_sessions.json")
 _PHONE = {"sessions": {}, "fails": {}, "lock": threading.Lock()}
 
 
 def lan_ips():
-    """이 PC의 와이파이·랜 주소 (폰에서 접속할 주소)"""
     ips = set()
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
             ips.add(info[4][0])
     except Exception:
         pass
-    try:   # 기본 경로로 나가는 주소 (실제로 보내진 않음)
+    try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u:
             u.connect(("8.8.8.8", 80))
             ips.add(u.getsockname()[0])
@@ -5664,7 +5124,6 @@ def lan_ips():
 
 
 def ensure_phone_cert():
-    """폰 연결용 https 인증서를 만듦 (이미 있으면 그대로). 실패하면 False"""
     if os.path.exists(PHONE_CERT) and os.path.exists(PHONE_KEY):
         return True
     try:
@@ -5728,7 +5187,6 @@ def phone_session_ok(tok):
 
 
 def phone_login_blocked(ip):
-    """비밀번호를 5번 틀리면 그 기기는 5분 동안 로그인 못 함 (마구 맞혀 보기 방지)"""
     with _PHONE["lock"]:
         n, until = _PHONE["fails"].get(ip, (0, 0.0))
         return time.time() < until
@@ -5755,9 +5213,6 @@ button{margin-top:12px;background:#29e3ff;color:#04121e;font-weight:bold}.err{co
 <button type="submit">연결</button><div class="err">__ERR__</div></form></body></html>"""
 
 
-# ---------------------------------------------------------------------------
-# HTTP 서버
-# ---------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
     @property
     def _phone(self):
@@ -5774,9 +5229,6 @@ class Handler(BaseHTTPRequestHandler):
         return phone_session_ok(self._phone_cookie())
 
     def _host_ok(self):
-        """요청 주소가 이 컴퓨터(localhost/127.0.0.1)인지. 다른 이름으로 들어온 요청은
-        'DNS 리바인딩'으로 외부 웹사이트가 자비스를 조종하려는 시도일 수 있어 거부.
-        폰 연결 문(https)은: 같은 와이파이(사설 IP)에서 온 요청 + 주소창이 IP 숫자 주소일 때만."""
         host = (self.headers.get("Host") or "").lower()
         if not self._phone:
             return host in ALLOWED_HOSTS
@@ -5794,7 +5246,6 @@ class Handler(BaseHTTPRequestHandler):
         return origin in ALLOWED_ORIGINS
 
     def _read_body(self, max_bytes):
-        """본문 읽기 (너무 크거나 잘못된 길이는 거부해서 메모리 폭주 방지). 실패하면 None."""
         try:
             length = int(self.headers.get("Content-Length", 0) or 0)
         except ValueError:
@@ -5804,9 +5255,6 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length) if length else b""
 
     def _request_allowed(self, require_origin=True):
-        # 토큰은 항상 확인합니다. Origin 헤더는 브라우저가 같은 출처로 보내는
-        # 단순 GET 요청(/stats 폴링 등)에는 붙이지 않는 경우가 많아서, 상태를
-        # 바꾸는 POST 요청(/execute)에서만 추가로 요구합니다.
         if self.headers.get(TOKEN_HEADER) != SERVER_TOKEN:
             return False
         if self._phone and not self._phone_authed():
@@ -5834,8 +5282,6 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
-            # 브라우저가 (보통 8초 타임아웃으로) 먼저 연결을 끊은 경우입니다. 명령
-            # 자체는 이미 처리됐고 응답만 못 보낸 것이므로, 서버는 조용히 넘어갑니다.
             pass
 
     def _start_stream(self):
@@ -5861,10 +5307,10 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
             self.wfile.flush()
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
-            self._stream_ok = False   # 화면이 끊었어도 명령 처리는 끝까지
+            self._stream_ok = False
 
     def log_message(self, fmt, *args):
-        pass  # 콘솔에 불필요한 로그 숨김
+        pass
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
@@ -5916,11 +5362,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "tts_unavailable"}, 503)
             self.close_connection = True
         elif path == "/favicon.ico":
-            # 브라우저가 자동으로 찾는 탭 아이콘: 빈 응답 (콘솔에 404 오류가 뜨지 않게)
             self.send_response(204)
             self.end_headers()
         elif path == "/alive":
-            # 깨우기 프로그램(jarvis_wake.py)이 서버/화면 상태만 확인하는 용도 (민감 정보 없음)
             self._send_json({"ok": True, "tab": tab_likely_open()})
         elif path == "/stats":
             if not self._request_allowed(require_origin=False):
@@ -5928,7 +5372,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "forbidden"}, 403)
                 return
             if not self._phone:
-                mark_seen()   # PC 화면이 열려 있는지는 PC 화면 신호로만 (폰은 따로)
+                mark_seen()
             if HAVE_PSUTIL:
                 cpu = round(psutil.cpu_percent(interval=0.2), 1)
                 mem = round(psutil.virtual_memory().percent, 1)
@@ -5941,7 +5385,7 @@ class Handler(BaseHTTPRequestHandler):
             uptime = f"{h:02d}:{mnt:02d}:{sec:02d}"
             self._send_json({
                 "cpu": cpu, "mem": mem, "uptime": uptime, "psutil": HAVE_PSUTIL,
-                "wake": False if self._phone else consume_wake_pending(),   # PC 화면 몫은 폰이 가져가지 않게
+                "wake": False if self._phone else consume_wake_pending(),
                 "security_alerts": [] if self._phone else consume_security_pending(),
                 "phone": self._phone,
                 "gemini": gemini_usage_snapshot(),
@@ -6024,7 +5468,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             streaming = bool(data.get("stream"))
             if streaming:
-                # 대화 대답은 첫 문장이 나오자마자 {"say": ...} 한 줄을 먼저 보내서 화면이 바로 말하게 함
                 if not self._start_stream():
                     return
                 lang = reply_lang()
@@ -6036,7 +5479,7 @@ class Handler(BaseHTTPRequestHandler):
             sink = getattr(_TLS, "sink", None)
 
             def _work():
-                _TLS.sink = sink   # 먼저 말할 문장 통로는 일하는 스레드에서도 쓰게
+                _TLS.sink = sink
                 try:
                     return interpret_command(command)
                 finally:
@@ -6059,11 +5502,10 @@ class Handler(BaseHTTPRequestHandler):
             result.pop("_sec", None)
             if streaming:
                 self._stream_line(dict(result, final=True))
-                self._stream_ok = False   # 시간 초과로 먼저 끝낸 경우, 늦게 온 문장은 보내지 않음
+                self._stream_ok = False
             else:
                 self._send_json(result)
         elif self.path == "/transcribe":
-            # 브라우저가 녹음한 오디오(raw body)를 받아 Groq Whisper로 받아쓰기합니다.
             if not self._request_allowed():
                 self._log_blocked()
                 self._send_json({"error": "forbidden"}, 403)
@@ -6091,16 +5533,13 @@ class Handler(BaseHTTPRequestHandler):
                     score, base, emb = speaker_check(audio)
                 except Exception as e:
                     print(f"[JARVIS] 목소리 확인 오류: {e}")
-                # 짧은 말("자비스", "크롬 열어")은 목소리 특징이 덜 잡혀 점수가 낮게 나오므로 기준을 낮춤
                 need = SPEAKER_THRESHOLD - (0.12 if dur < 1.5 else 0.06 if dur < 2.5 else 0.0)
                 strict_ok = score is not None and score >= need
                 if not strict_ok and time.time() < _SPK_TRUST["until"]:
-                    # 방금 보스라고 확인된 대화가 이어지는 중: 기준을 조금 낮춤 (다른 사람은 보통 0.4도 안 나옴)
                     need = max(0.40, need - TRUST_DROP)
                     trusted = True
                 _log_speaker(dur, score, need)
                 if score is not None and score < need:
-                    # 보스 목소리가 아니면 Whisper(=Groq 한도)도 쓰지 않고 무시
                     _log_listen(dur, score, "", f"목소리 다름(기준 {need:.2f})")
                     self._send_json({"text": "", "speaker": "other", "score": round(score, 2)})
                     return
@@ -6118,7 +5557,6 @@ class Handler(BaseHTTPRequestHandler):
                              "score": round(score, 2) if score is not None else None,
                              "error": (info.get("why") or "stt") if text is None else None})
         elif self.path in ("/enroll", "/enroll/reset"):
-            # 보스 목소리 등록 (/enroll: 녹음 하나 추가, /enroll/reset: 등록 지우기)
             if not self._request_allowed():
                 self._log_blocked()
                 self._send_json({"error": "forbidden"}, 403)
@@ -6148,7 +5586,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._send_json({"ok": n is not None, "count": n or len(_SPK["samples"])})
         elif self.path == "/guest":
-            # 체험 모드 켜기(버튼) / 끄기(버튼 + 비밀번호)
             if not self._request_allowed():
                 self._log_blocked()
                 self._send_json({"error": "forbidden"}, 403)
@@ -6170,12 +5607,10 @@ class Handler(BaseHTTPRequestHandler):
                 msg = {"wrong": "비밀번호가 틀렸어요.", "none": "비밀번호가 설정돼 있지 않아요."}[res]
                 self._send_json({"ok": False, "guest": guest_on(), "reply": msg})
         elif self.path == "/bye":
-            # 자비스 화면이 닫힐 때 알려 줌 → 다음 박수/헤이 자비스에 새 창을 바로 열 수 있게
             if self._request_allowed() and not self._phone:
                 mark_closed()
             self._send_json({"ok": True})
         elif self.path == "/location":
-            # 자비스 화면이 보내준 내 위치(위도/경도)를 저장합니다.
             if not self._request_allowed():
                 self._log_blocked()
                 self._send_json({"error": "forbidden"}, 403)
@@ -6192,13 +5627,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 ok = False
             if ok:
-                set_location(lat, lon)   # 지명 변환까지 끝내고 화면에 알려줌 (약 1초)
+                set_location(lat, lon)
                 loc = current_location()
                 self._send_json({"ok": True, "name": loc.get("name", ""), "query": loc.get("query", "")})
             else:
                 self._send_json({"ok": False})
         elif self.path == "/tts":
-            # 텍스트를 받아 edge-tts로 자연스러운 음성(mp3)을 만들어 돌려줍니다.
             if not self._request_allowed():
                 self._log_blocked()
                 self._send_json({"error": "forbidden"}, 403)
@@ -6240,11 +5674,6 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
-# ---------------------------------------------------------------------------
-# "hey jarvis" 백그라운드 웨이크 워드 감지
-# ---------------------------------------------------------------------------
-# 보조 모니터가 있으면 자비스 화면을 그쪽에 크게 띄움 (없으면 예전처럼 기본 브라우저로)
-# 끄려면 환경변수 JARVIS_SECOND_SCREEN=0
 OPEN_ON_SECOND_SCREEN = os.environ.get("JARVIS_SECOND_SCREEN", "1") == "1"
 _BROWSER_CANDIDATES = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -6270,7 +5699,6 @@ class _MONITORINFO(ctypes.Structure if HAVE_WINDLL else object):
 
 
 def _monitors():
-    """연결된 모니터 목록: [{"work": (왼, 위, 오른, 아래), "primary": True/False}] (실제 픽셀 기준)"""
     if not HAVE_WINDLL:
         return []
     user32 = ctypes.windll.user32
@@ -6286,7 +5714,7 @@ def _monitors():
         return 1
 
     old = None
-    try:   # 노트북(125%)과 모니터(100%)의 배율이 달라도 정확한 위치를 쓰도록
+    try:
         old = user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
     except Exception:
         pass
@@ -6310,7 +5738,6 @@ def _window_title(hwnd):
 
 
 def _open_on_second_screen(url):
-    """보조 모니터에 자비스 창을 열고 최대화. 보조 모니터나 브라우저가 없으면 False."""
     if not (OPEN_ON_SECOND_SCREEN and HAVE_WINDLL):
         return False
     second = next((m for m in _monitors() if not m["primary"]), None)
@@ -6319,7 +5746,7 @@ def _open_on_second_screen(url):
         return False
     user32 = ctypes.windll.user32
     before = _visible_windows_of_class("Chrome_WidgetWin_1")
-    try:   # 주소창 없는 '앱 창'으로 열어서 자비스 화면만 깔끔하게
+    try:
         subprocess.Popen([exe, "--new-window", f"--app={url}"])
     except Exception:
         return False
@@ -6339,7 +5766,7 @@ def _open_on_second_screen(url):
                 except Exception:
                     pass
                 try:
-                    user32.ShowWindow(hwnd, 9)   # 원래 크기로 → 옮기고 → 최대화
+                    user32.ShowWindow(hwnd, 9)
                     user32.SetWindowPos(hwnd, 0, l + 40, t + 40, max(400, r - l - 80), max(300, b - t - 80), 0x0004)
                     user32.ShowWindow(hwnd, 3)
                 finally:
@@ -6373,43 +5800,37 @@ def open_dashboard(awake=False):
 
 def trigger_wake(reason='"hey jarvis"'):
     if tab_likely_open():
-        return   # 화면이 이미 켜져 있으면 아무것도 하지 않음 (켤 때만 쓰는 기능)
+        return
     print(f'[JARVIS] {reason} 감지! 화면을 열게요.')
     open_dashboard(awake=True)
 
 
 class ClapDetector:
-    """마이크 오디오 청크(80ms)를 계속 받아, 조용하다가 순간적으로 진폭이 치솟는
-    순간을 박수 한 번으로 세고, 짧은 시간 안에 두 번 감지되면 콜백을 부릅니다."""
 
     def __init__(self, on_double_clap):
         self.on_double_clap = on_double_clap
-        self.armed = True          # 다음 상승(onset)을 새 박수로 셀 준비가 됐는지
-        self.first_clap_at = 0.0    # 첫 박수 시각 (0이면 대기 중)
-        self.last_clap_at = 0.0     # 마지막으로 박수를 센 시각 (연속 감지 방지)
-        self.last_trigger_at = 0.0  # 마지막으로 "박수 2번" 성공한 시각 (쿨다운)
+        self.armed = True
+        self.first_clap_at = 0.0
+        self.last_clap_at = 0.0
+        self.last_trigger_at = 0.0
 
     def feed(self, peak, now):
-        # 큰 소리가 지나가고 다시 조용해지면 다음 박수를 셀 준비를 합니다.
         if peak < CLAP_QUIET_THRESHOLD:
             self.armed = True
             return
         if peak < CLAP_PEAK_THRESHOLD or not self.armed:
             return
-        # 여기 도달 = 조용하다가 큰 소리가 시작된 순간(박수 1회 후보)
         self.armed = False
         if now - self.last_clap_at < CLAP_MIN_GAP_SEC:
-            return  # 한 번의 박수가 여러 청크에 걸쳐 여러 번 세지는 것 방지
+            return
         self.last_clap_at = now
 
         if self.first_clap_at and (now - self.first_clap_at) <= CLAP_MAX_GAP_SEC:
-            # 두 번째 박수가 제한 시간 안에 들어옴 → 성공
             self.first_clap_at = 0.0
             if now - self.last_trigger_at > CLAP_COOLDOWN_SEC:
                 self.last_trigger_at = now
                 self.on_double_clap()
         else:
-            # 첫 박수(또는 너무 늦게 온 박수를 새 첫 박수로 취급)
             self.first_clap_at = now
 
 
@@ -6421,8 +5842,6 @@ def wake_word_worker():
         open_dashboard()
         return
 
-    # "hey jarvis" 웨이크 워드 모델 준비 (openwakeword가 있을 때만). 없거나 실패하면
-    # 박수 2번 감지만으로 계속 진행합니다.
     oww = None
     if HAVE_WAKEWORD:
         try:
@@ -6439,7 +5858,6 @@ def wake_word_worker():
     paused = [False]
 
     def on_audio(indata, _frames, _time_info, _status):
-        # 자비스 화면이 켜져 있는 동안은 박수/헤이 자비스를 아예 듣지 않음 (화면을 켤 때만 쓰는 기능)
         if tab_likely_open():
             if not paused[0]:
                 paused[0] = True
@@ -6455,15 +5873,12 @@ def wake_word_worker():
             print('[JARVIS] 화면이 꺼져서 다시 박수/헤이 자비스를 기다려요.')
         mono = indata[:, 0]
 
-        # 1) 박수 2번 감지 (진폭 피크 기반)
         if clap is not None:
             peak = float(np.max(np.abs(mono))) if mono.size else 0.0
             if CLAP_DEBUG and peak > CLAP_DEBUG_MIN:
-                # 박수쳤을 때 여기 찍히는 값이 CLAP_PEAK_THRESHOLD보다 커야 박수로 셉니다.
                 print(f'[JARVIS][debug] peak={peak:.2f}')
             clap.feed(peak, time.time())
 
-        # 2) "hey jarvis" 웨이크 워드 감지 (openwakeword 모델이 있을 때만)
         if oww is not None:
             audio = (mono * 32767.0).astype(np.int16)
             try:
@@ -6472,8 +5887,6 @@ def wake_word_worker():
                 return
             score = prediction.get(WAKE_MODEL_NAME, 0.0)
             if WAKE_DEBUG and score > 0.1:
-                # 0.1 이상 잡힐 때만 찍습니다. "hey jarvis"라고 말했는데 여기 점수가
-                # 아예 안 뜨면 마이크 입력 문제, 뜨는데 낮으면 WAKE_THRESHOLD를 내리세요.
                 print(f'[JARVIS][debug] hey_jarvis score={score:.2f}')
             if score > WAKE_THRESHOLD:
                 now = time.time()
@@ -6499,25 +5912,16 @@ def wake_word_worker():
         print("         마이크 장치/권한을 확인하거나, 브라우저에서 직접 http://localhost:5005/ 를 열어주세요.")
 
 
-# ---------------------------------------------------------------------------
-# 보안 상태 감시 (Windows Defender / 방화벽 / 최근 위협 탐지)
-# 자비스가 SLEEP 상태거나 브라우저 탭이 아예 닫혀 있어도, 백그라운드에서
-# 주기적으로 점검하다가 문제가 있으면 스스로 화면을 열어 음성으로 알립니다.
-# ---------------------------------------------------------------------------
-SECURITY_CHECK_INTERVAL_SEC = 300   # 5분마다 점검
-SECURITY_REALERT_SEC = 1200         # 같은 문제를 반복해서 알리지 않는 최소 간격 (20분)
+SECURITY_CHECK_INTERVAL_SEC = 300
+SECURITY_REALERT_SEC = 1200
 
 SECURITY_LOCK = threading.Lock()
-SECURITY_PENDING = []          # 아직 화면에 전달하지 않은 경고 문구
-_SECURITY_LAST_ALERTED = {}    # issue_key -> 마지막으로 알린 시각
-_SECURITY_SEEN_THREATS = set()  # 이미 알린 Defender 위협 ID (중복 알림 방지)
+SECURITY_PENDING = []
+_SECURITY_LAST_ALERTED = {}
+_SECURITY_SEEN_THREATS = set()
 
 
 def check_security():
-    """Windows Defender 실시간 보호 / 방화벽 / 최근 위협 탐지를 확인합니다.
-    문제를 찾으면 (issue_key, 알림 문구) 목록을 반환하고, 정상이거나 확인
-    자체가 불가능한 환경(예: PowerShell/Defender 모듈이 없는 경우)이면
-    조용히 빈 목록을 반환합니다."""
     issues = []
     script = (
         "$mp = Get-MpComputerStatus -ErrorAction SilentlyContinue | "
@@ -6559,11 +5963,6 @@ def check_security():
 
 
 def queue_security_alerts(issues):
-    """새로 발견됐거나 재알림 주기(SECURITY_REALERT_SEC)가 지난 문제만 골라
-    화면에 전달할 대기열에 쌓고, 탭이 열려 있지 않으면 직접 화면을 열게요.
-    issues가 비어있어도(=현재는 문제 없음) 아래 정리 로직은 계속 돌려야, 이전에
-    있던 문제가 해결됐다는 사실이 기록에 반영되어 나중에 재발했을 때 쿨다운
-    없이 곧바로 다시 알릴 수 있습니다."""
     now = time.time()
     to_announce = []
     with SECURITY_LOCK:
@@ -6573,8 +5972,6 @@ def queue_security_alerts(issues):
             if now - last > SECURITY_REALERT_SEC:
                 _SECURITY_LAST_ALERTED[key] = now
                 to_announce.append(message)
-        # 위협 탐지 기록은 계속 남겨 같은 위협을 다시 알리지 않고, 그 외(디펜더/
-        # 방화벽 꺼짐 등)는 해결되면 기록을 지워서 나중에 재발하면 곧바로 다시 알립니다.
         for key in list(_SECURITY_LAST_ALERTED.keys()):
             if key not in current_keys and not key.startswith("threat_"):
                 del _SECURITY_LAST_ALERTED[key]
@@ -6595,7 +5992,7 @@ def consume_security_pending():
 
 
 def security_worker():
-    time.sleep(120)  # 시작 직후엔 PowerShell 점검을 미뤄 서버/화면이 빨리 뜨게 합니다
+    time.sleep(120)
     while True:
         try:
             queue_security_alerts(check_security())
@@ -6604,9 +6001,7 @@ def security_worker():
         time.sleep(SECURITY_CHECK_INTERVAL_SEC)
 
 
-# 서버를 켜면 화면을 바로 열지 않고, 박수 2번 / "Hey Jarvis" 를 기다립니다.
-# 바로 열고 싶으면 False 로 바꾸거나:  python jarvis_server.py --now
-WAIT_FOR_WAKE = False   # 새 방식(jarvis_wake.py)은 끔. 원래 기능(ENABLE_PY_WAKE)을 씁니다.
+WAIT_FOR_WAKE = False
 
 
 def clap_wake_worker():
@@ -6633,8 +6028,6 @@ def clap_wake_worker():
 
 
 class JarvisHTTPServer(ThreadingHTTPServer):
-    """포트를 이 서버 하나만 쓰게 함. (Windows는 기본 설정이면 자비스를 두 번 켰을 때 둘 다 같은 포트를
-    잡아서, 화면 요청이 두 서버에 번갈아 가며 토큰이 안 맞아 먹통처럼 보였음)"""
     allow_reuse_address = False
     daemon_threads = True
 
@@ -6645,7 +6038,6 @@ class JarvisHTTPServer(ThreadingHTTPServer):
 
 
 class PhoneHTTPServer(JarvisHTTPServer):
-    """폰 연결 문 (https). 암호화 악수는 요청마다 따로 (느린 폰 하나가 다른 접속을 막지 않게)"""
     phone = True
 
     def __init__(self, addr, handler, ctx):
@@ -6661,7 +6053,7 @@ class PhoneHTTPServer(JarvisHTTPServer):
             request.settimeout(15)
             request.do_handshake()
         except (ssl.SSLError, OSError):
-            return   # http:// 로 들어왔거나 경고 화면에서 멈춘 경우
+            return
         super().finish_request(request, client_address)
 
     def handle_error(self, request, client_address):
@@ -6694,32 +6086,31 @@ def start_phone_server():
 
 def main():
     install_crash_logging(JARVIS_VERSION)
-    _load_gemini_usage()  # 재시작 전 오늘 사용량 복원 (남은 요청량 정확도 유지)
-    _load_chat_history()  # 지난 대화 기억 복원 (재시작해도 이어서 대화)
-    _load_location()      # 지난번에 확인한 내 위치 복원 (날씨용)
-    _load_reply_lang()    # "영어로만 말해" 같은 대답 언어 설정 복원
-    _load_tts_rate()      # "1.5배속으로 말해"로 바꾼 말 속도 복원
-    _load_spk_threshold() # "목소리 기준 낮춰줘"로 바꾼 기준 복원
+    _load_gemini_usage()
+    _load_chat_history()
+    _load_location()
+    _load_reply_lang()
+    _load_tts_rate()
+    _load_spk_threshold()
     if HAVE_SPK:
         _load_voiceprint()
         if voiceprint_ready() and SPEAKER_CHECK:
             print(f"[JARVIS] 보스 목소리로만 반응해요 (등록된 목소리 {len(_SPK['samples'])}개, 기준 {SPEAKER_THRESHOLD}).")
         elif not SPEAKER_CHECK:
             print("[JARVIS] 목소리 확인은 꺼 두었어요. 보스 모드도 체험 모드처럼 들어요.")
-        threading.Thread(target=lambda: _spk_extractor(), daemon=True).start()  # 모델 미리 준비
+        threading.Thread(target=lambda: _spk_extractor(), daemon=True).start()
     print(f"[JARVIS] 설치된 프로그램 {len(PROGRAM_INDEX)}개를 찾았습니다.")
     if not HAVE_PSUTIL:
         print("[JARVIS] 참고: psutil이 설치되어 있지 않아 CPU/메모리 표시와 프로그램 종료 기능이 동작하지 않습니다.")
         print("         pip install psutil --break-system-packages 로 설치하면 사용할 수 있습니다.")
 
-    threading.Thread(target=file_index_worker, daemon=True).start()  # 파일 인덱스는 백그라운드
-    threading.Thread(target=prewarm_tts, daemon=True).start()        # 발표용 문장 목소리 미리 만들기
-    _CLAUDE_POOL.submit(claude_prewarm)                               # Claude 첫 대답이 느리지 않게
+    threading.Thread(target=file_index_worker, daemon=True).start()
+    threading.Thread(target=prewarm_tts, daemon=True).start()
+    _CLAUDE_POOL.submit(claude_prewarm)
 
     try:
         server = JarvisHTTPServer(("127.0.0.1", PORT), Handler)
     except OSError:
-        # 이미 자비스가 켜져 있으면 두 번째 것은 조용히 끝냄 (다시 켜기 반복 안 하게 정상 종료)
         print(f"[JARVIS] 포트 {PORT}를 이미 쓰고 있어요. 자비스가 벌써 켜져 있는 것 같아요. 이 창은 닫아도 돼요.")
         _crash_note(f"[시작 안 함] 포트 {PORT}가 이미 사용 중 (자비스가 이미 켜져 있음)")
         return
@@ -6732,10 +6123,8 @@ def main():
     if ENABLE_PY_WAKE:
         threading.Thread(target=wake_word_worker, daemon=True).start()
     elif WAIT_FOR_WAKE:
-        # 화면은 닫아 둔 채 기다리다가, 박수 2번 / "Hey Jarvis" 를 들으면 화면을 엽니다.
         threading.Thread(target=clap_wake_worker, daemon=True).start()
     else:
-        # 서버가 뜨자마자 자비스 화면을 바로 엽니다 (화면이 열리면 곧바로 듣기 시작).
         threading.Thread(target=lambda: (time.sleep(0.3), open_dashboard()), daemon=True).start()
     threading.Thread(target=security_worker, daemon=True).start()
 

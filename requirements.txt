@@ -1,25 +1,9 @@
-# 전부 선택 설치입니다 (설치 안 해도 기본 기능은 그대로 동작합니다).
-#   pip install -r requirements.txt
-
-# CPU/메모리 실시간 표시 + "OO 종료해줘" 프로그램 종료 명령
 psutil
-
-# "hey jarvis" 웨이크 워드 / 박수 감지
 openwakeword
 sounddevice
 numpy
-
-# 자비스 목소리 (마이크로소프트 신경망 음성, 무료)
 edge-tts>=7.3.1
-
-# 보스 목소리만 알아듣기 (화자 인증, 목소리는 컴퓨터 밖으로 안 나감)
 sherpa-onnx
-
-# 대화 두뇌 (Claude API)
 anthropic
-
-# 윈도우 소리 / 음소거 제어
 comtypes
-
-# 핸드폰 연결용 https 인증서 자동 생성
 cryptography
