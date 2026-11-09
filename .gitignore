@@ -1,6 +1,5 @@
 # ── API 키 ──
 groq_key.txt
-claude_key.txt
 gemini_key.txt
 *_key.txt
 .env

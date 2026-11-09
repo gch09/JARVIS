@@ -546,12 +546,6 @@ function updateGeminiBox(g){
     box.innerHTML = '<span class="g-dot g-off"></span>AI 미연결 (규칙 기반)';
     return;
   }
-  if(g.claude){
-    const c = g.claude;
-    box.innerHTML = '<span class="g-dot ' + (c.ok ? 'g-green' : 'g-yellow') + '"></span>Claude ' + c.model +
-      (c.ok ? ' · 오늘 대화 <b>' + c.calls + '</b>번' : ' 잠시 쉬는 중' + (c.fallback ? ' → ' + c.fallback + '로 대답' : ''));
-    return;
-  }
   const name = g.provider || 'AI';
   if(g.exhausted){
     box.innerHTML = '<span class="g-dot g-red"></span>' + name + ' 오늘 한도 소진 · 내일 리셋';

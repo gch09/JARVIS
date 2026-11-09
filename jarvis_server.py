@@ -67,12 +67,6 @@ try:
 except ImportError:
     HAVE_EDGE_TTS = False
 
-try:
-    import anthropic
-    HAVE_ANTHROPIC = True
-except ImportError:
-    HAVE_ANTHROPIC = False
-
 EDGE_VOICE_EN = os.environ.get("JARVIS_EDGE_VOICE_EN", "en-US-EricNeural")
 EDGE_VOICE_KO = os.environ.get("JARVIS_EDGE_VOICE_KO", "ko-KR-InJoonNeural")
 EDGE_VOICE_OTHER = {"ja": "ja-JP-KeitaNeural", "zh-CN": "zh-CN-YunxiNeural", "es": "es-ES-AlvaroNeural",
@@ -84,7 +78,7 @@ EDGE_PITCH = os.environ.get("JARVIS_EDGE_PITCH", "-7Hz")
 HAVE_WINDLL = hasattr(ctypes, "windll")
 
 PORT = 5005
-JARVIS_VERSION = os.environ.get("JARVIS_VERSION", "14.3")
+JARVIS_VERSION = os.environ.get("JARVIS_VERSION", "14.4")
 ALLOW_COMPUTER_POWER = os.environ.get("JARVIS_ALLOW_SHUTDOWN", "0") == "1"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_PATH = os.path.join(BASE_DIR, "jarvis.html")
@@ -3286,13 +3280,6 @@ def gemini_usage_snapshot():
     remaining = 0 if exhausted else max(0, limit - used)
     out = {"enabled": enabled, "provider": provider, "used": used, "limit": limit,
            "remaining": remaining, "exhausted": exhausted}
-    if HAVE_ANTHROPIC and claude_key():
-        today = datetime.date.today().isoformat()
-        out["claude"] = {"model": "Opus 5.5" if "opus" in CLAUDE_MODEL else ("Sonnet 5.5" if "sonnet" in CLAUDE_MODEL else CLAUDE_MODEL),
-                         "calls": _CLAUDE["calls"] if _CLAUDE["date"] == today else 0,
-                         "ok": _CLAUDE["last_ok"] is not False and time.time() >= _CLAUDE["off_until"]}
-        out["claude"]["fallback"] = "Groq" if groq_ai_on() else ""
-        out["enabled"] = True
     return out
 
 
@@ -3383,7 +3370,7 @@ GEMINI_CHAT_SYSTEM_PROMPT = (
     "- 보스의 말은 음성 받아쓰기라 가끔 틀립니다. 말이 이상하거나 뜻이 분명하지 않으면 엉뚱하게 이어가지 말고 "
     "'혹시 ~라고 하셨어요?'처럼 짧게 되묻습니다.\n"
     "- 당신이 만들어진 방법(물으면 이대로만): 보스가 파이썬으로 직접 만들었고, 화면은 HTML과 자바스크립트예요. "
-    "들은 말은 Whisper 음성 인식으로 글자로 바꾸고, 대화는 인공지능(Claude)이 하고, 목소리는 마이크로소프트 음성 합성이에요. "
+    "들은 말은 Whisper 음성 인식으로 글자로 바꾸고, 대화는 인공지능(Groq)이 하고, 목소리는 마이크로소프트 음성 합성이에요. "
     "음성 인식·목소리 같은 부품은 공개된 기술을 가져다 썼지만, 그걸 이어 붙여 자비스로 만든 건 보스예요.\n"
     "- 주변 사람들끼리 하는 말이 분명할 때(다른 사람 이름을 부르며 말하거나, 여러 사람 말이 뒤섞여 당신에게 하는 말이 아닌 게 확실할 때)는 "
     "대답하지 말고 정확히 [조용] 이라고만 출력합니다. 당신에게 하는 말일 수도 있으면 평소처럼 대답합니다.\n"
@@ -4053,207 +4040,14 @@ def _is_quiet_reply(text):
     return bool(re.fullmatch(r"\W*\[?\s*조용\s*\]?\W*", (text or "").strip()))
 
 
-CLAUDE_KEY_FILE = os.path.join(BASE_DIR, "claude_key.txt")
-CLAUDE_MODEL = os.environ.get("JARVIS_CLAUDE_MODEL", "claude-sonnet-5-5")
-CLAUDE_EFFORT = os.environ.get("JARVIS_CLAUDE_EFFORT", "low")
-CLAUDE_TIMEOUT_SEC = 10
-_CLAUDE = {"client": None, "key": "", "calls": 0, "date": "", "last_ok": None, "last_sec": None, "off_until": 0.0}
-_CLAUDE_LOCK = threading.Lock()
-
-
-def claude_key():
-    key = os.environ.get("JARVIS_CLAUDE_API_KEY", "").strip()
-    if key:
-        return key
-    try:
-        with open(CLAUDE_KEY_FILE, "r", encoding="utf-8-sig") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    return line
-    except Exception:
-        pass
-    return ""
-
-
-def _claude_client():
-    key = claude_key()
-    if not (HAVE_ANTHROPIC and key):
-        return None
-    with _CLAUDE_LOCK:
-        if _CLAUDE["client"] is None or _CLAUDE["key"] != key:
-            _CLAUDE["client"] = anthropic.Anthropic(api_key=key, timeout=CLAUDE_TIMEOUT_SEC, max_retries=0)
-            _CLAUDE["key"] = key
-        return _CLAUDE["client"]
-
-
-def _claude_note(ok, sec=None):
-    with _CLAUDE_LOCK:
-        today = datetime.date.today().isoformat()
-        if _CLAUDE["date"] != today:
-            _CLAUDE["date"], _CLAUDE["calls"] = today, 0
-        if ok:
-            _CLAUDE["calls"] += 1
-        _CLAUDE["last_ok"], _CLAUDE["last_sec"] = ok, sec
-
-
-_CLAUDE_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+_AI_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 _TR_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=6)
 _EXEC_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8)
 EXEC_TIMEOUT_SEC = 20
 
 
-def _claude_request(stable, dynamic, messages, max_tokens):
-    req = dict(
-        model=CLAUDE_MODEL,
-        max_tokens=max_tokens,
-        system=[{"type": "text", "text": stable, "cache_control": {"type": "ephemeral"}},
-                {"type": "text", "text": dynamic}],
-        output_config={"effort": CLAUDE_EFFORT},
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-        messages=messages,
-    )
-    if "sonnet-5-5" in CLAUDE_MODEL:
-        req["thinking"] = {"type": "between_tools"}
-    return req
-
-
-def claude_prewarm():
-    client = _claude_client()
-    if client is None:
-        return
-    try:
-        stable, dynamic = _chat_system_parts()
-        r = client.beta.messages.create(**_claude_request(stable, dynamic, [{"role": "user", "content": "안녕"}], 0))
-        print(f"[JARVIS] Claude({CLAUDE_MODEL}) 준비 완료 (캐시 {r.usage.cache_creation_input_tokens or 0}"
-              f"+{r.usage.cache_read_input_tokens or 0}).")
-    except Exception as e:
-        print(f"[JARVIS] Claude 미리 준비 실패 ({type(e).__name__}). 첫 대답만 조금 느릴 수 있어요.")
-
-
 _TLS = threading.local()
-_SENT_END_RE = re.compile(r"[.!?。！？~]+[\"')\]」]*\s+")
-
-
-def _pump_reply(q, say, deadline):
-    buf, said, first_done = "", [], False
-    while True:
-        left = deadline - time.time()
-        if left <= 0:
-            return ""
-        try:
-            d = q.get(timeout=left)
-        except queue.Empty:
-            return ""
-        if d is None:
-            break
-        buf += d
-        if not first_done:
-            m = _SENT_END_RE.search(buf)
-            if not m:
-                continue
-            first = buf[:m.end()].strip()
-            if _is_quiet_reply(first):
-                return ""
-            if len(first) < 6:
-                m2 = _SENT_END_RE.search(buf, m.end())
-                if not m2:
-                    continue
-                first = buf[:m2.end()].strip()
-                m = m2
-            first = fix_claims(first)
-            say(first)
-            said.append(first)
-            buf = buf[m.end():]
-            first_done = True
-    rest = fix_claims(buf.strip())
-    if rest and not (not first_done and _is_quiet_reply(rest)):
-        say(rest)
-        said.append(rest)
-    return " ".join(said)
-
-
 _NET = {"fail_at": 0.0}
-
-
-def claude_ready():
-    return _claude_client() is not None and time.time() >= _CLAUDE["off_until"]
-
-
-def claude_chat(user_text, add_history=True, deltas=None):
-    try:
-        return _claude_chat(user_text, add_history, deltas)
-    finally:
-        if deltas is not None:
-            deltas.put(None)
-
-
-def _claude_chat(user_text, add_history, deltas):
-    client = _claude_client()
-    if client is None or time.time() < _CLAUDE["off_until"]:
-        return None
-    stable, dynamic = _chat_system_parts()
-    messages = []
-    for pair in _chat_history_snapshot():
-        messages.append({"role": "user", "content": pair["user"]})
-        messages.append({"role": "assistant", "content": pair["assistant"]})
-    messages.append({"role": "user", "content": user_text})
-    t0 = time.time()
-    try:
-        req = _claude_request(stable, dynamic, messages, 2048)
-        if deltas is None:
-            resp = client.beta.messages.create(**req)
-        else:
-            with client.beta.messages.stream(**req) as st:
-                for piece in st.text_stream:
-                    deltas.put(piece)
-                resp = st.get_final_message()
-    except anthropic.AuthenticationError:
-        print("[JARVIS] Claude 키가 맞지 않아요. claude_key.txt를 확인해 주세요. 지금은 Groq로 대답해요.")
-        _CLAUDE["off_until"] = time.time() + 600
-        _claude_note(False)
-        return None
-    except anthropic.RateLimitError as e:
-        retry = 30
-        try:
-            retry = int(e.response.headers.get("retry-after", "30"))
-        except Exception:
-            pass
-        print(f"[JARVIS] Claude 한도에 걸렸어요(429). {retry}초 동안 Groq로 대답해요.")
-        _CLAUDE["off_until"] = time.time() + max(5, retry)
-        _claude_note(False)
-        return None
-    except anthropic.APIStatusError as e:
-        print(f"[JARVIS] Claude 오류({e.status_code}). 이번엔 Groq로 대답해요.")
-        if e.status_code in (400, 402, 403, 404):
-            _CLAUDE["off_until"] = time.time() + 300
-        _claude_note(False)
-        return None
-    except (anthropic.APIConnectionError, anthropic.APITimeoutError):
-        print("[JARVIS] Claude에 연결하지 못했어요. 이번엔 Groq로 대답해요.")
-        _NET["fail_at"] = time.time()
-        _claude_note(False)
-        return None
-    except Exception as e:
-        print(f"[JARVIS] Claude 대답 오류: {type(e).__name__}")
-        _claude_note(False)
-        return None
-    sec = round(time.time() - t0, 2)
-    if resp.stop_reason == "refusal":
-        _claude_note(False, sec)
-        return None
-    text = "".join(b.text for b in resp.content if b.type == "text").strip()
-    if not text:
-        _claude_note(False, sec)
-        return None
-    _claude_note(True, sec)
-    u = resp.usage
-    print(f"[JARVIS] Claude 대답 {sec}초 (입력 {u.input_tokens} + 캐시 {getattr(u, 'cache_read_input_tokens', 0) or 0}, "
-          f"출력 {u.output_tokens})")
-    if add_history and not _is_quiet_reply(text):
-        _chat_history_add(user_text, text)
-    return text
 
 
 GUEST = {"on": False}
@@ -4338,7 +4132,6 @@ def guest_set(on):
     with _CHAT_HISTORY_LOCK:
         _GUEST_HISTORY.clear()
     print(f"[JARVIS] 체험 모드를 {'켰어요. 끌 때까지 누구 목소리든 들어요.' if on else '껐어요. 다시 보스 모드예요.'}")
-    _CLAUDE_POOL.submit(claude_prewarm)
 
 
 def try_guest_mode(cmd):
@@ -4528,10 +4321,10 @@ def _interpret_command_inner(raw_command):
             missed = sum(1 for c, r in zip(subs, results) if r["action"] == "none" and _BARE_REQUEST_RE.match(c))
             if len(understood) >= 2:
                 understood = [r for r in understood if r.get("matched") != "wake"] or understood[:1]
-            if understood and CONVERSATION_ENABLED and claude_ready():
+            if understood and CONVERSATION_ENABLED and groq_ai_on() and not _groq_blocked():
                 for c, r in zip(subs, results):
                     if r["action"] == "none" and re.search(r"[?？]$", c) and len(c) >= 4:
-                        ans = claude_chat(c)
+                        ans = groq_chat(c)
                         if ans and not _is_quiet_reply(ans):
                             understood.append({"reply": ans, "action": "chat", "matched": None})
             if len(understood) == 1:
@@ -4556,15 +4349,9 @@ def _interpret_command_inner(raw_command):
             print(f"[JARVIS] 말이 뭉개졌지만 '{am.group(1)}' 열어 달라는 말로 봤어요: {raw_command}")
             return again
 
-    chat_text = raw_command
-    claude_future = None
-    stream_q = queue.Queue() if getattr(_TLS, "say", None) else None
-    if primary["action"] == "none" and CONVERSATION_ENABLED and claude_ready():
-        claude_future = _CLAUDE_POOL.submit(claude_chat, raw_command, False, stream_q)
-
     if primary["action"] == "none" and groq_ai_on() and len(raw_command) <= 30 and not _groq_blocked(GROQ_FIX_MODEL):
         try:
-            fixed = _CLAUDE_POOL.submit(groq_fix_transcript, raw_command).result(timeout=2.0)
+            fixed = _AI_POOL.submit(groq_fix_transcript, raw_command).result(timeout=2.0)
         except Exception:
             fixed = None
         if fixed and fixed != raw_command:
@@ -4601,21 +4388,7 @@ def _interpret_command_inner(raw_command):
         return primary
 
     if CONVERSATION_ENABLED:
-        reply = None
-        said = ""
-        if claude_future is not None:
-            say = getattr(_TLS, "say", None)
-            if say and stream_q is not None and not _DID_ACTION_ASK_RE.search(raw_command):
-                said = _pump_reply(stream_q, say, time.time() + CLAUDE_TIMEOUT_SEC + 1)
-            try:
-                reply = claude_future.result(timeout=CLAUDE_TIMEOUT_SEC + 1)
-            except Exception:
-                reply = None
-            if reply and not _is_quiet_reply(reply):
-                _chat_history_add(chat_text, reply)
-        else:
-            reply = claude_chat(raw_command)
-        reply = reply or groq_chat(raw_command) or (gemini_chat(raw_command) if use_gemini else None)
+        reply = groq_chat(raw_command) or (gemini_chat(raw_command) if use_gemini else None)
         if reply and _DID_ACTION_ASK_RE.search(raw_command) and \
                 re.search(r"(열었|열겠|열어\s*드[렸릴]|켰|켜\s*드[렸릴]|켜겠|실행했|실행하겠|시작했|맞췄|"
                           r"맞춰\s*드[렸릴]|틀었|틀어\s*드[렸릴]|띄웠|띄워\s*드[렸릴]|껐|끄겠|종료했|검색했|찾아\s*드렸|"
@@ -4628,17 +4401,14 @@ def _interpret_command_inner(raw_command):
             print(f"[JARVIS] 주변 사람끼리 하는 말 같아서 대답하지 않았어요: {raw_command[:40]}")
             return {"reply": "", "action": "none", "matched": "chatter"}
         if reply:
-            out = {"reply": reply, "action": "chat", "matched": None}
-            if said and claude_future is not None and reply.startswith(said.split(" ")[0]):
-                out["spoken"] = True
-            return out
+            return {"reply": reply, "action": "chat", "matched": None}
         for pat, ans in QUICK_REPLIES:
             if re.search(pat, raw_command):
                 return {"reply": ans, "action": "chat", "matched": "quick"}
         if time.time() - _NET["fail_at"] < 60:
             return {"reply": "인터넷 연결이 잠깐 불안정해서 대화가 어려워요. 그동안 크롬이나 계산기 열기, 계산, 퀴즈, 가위바위보는 할 수 있어요!",
                     "action": "info", "matched": "offline"}
-        if (groq_ai_on() and _groq_blocked()) or (HAVE_ANTHROPIC and claude_key()):
+        if groq_ai_on() and _groq_blocked():
             return {"reply": "죄송해요 보스, 잠깐 생각이 몰려서요. 몇 초 뒤에 다시 말씀해 주실래요?",
                     "action": "info", "matched": "busy"}
 
@@ -6106,7 +5876,6 @@ def main():
 
     threading.Thread(target=file_index_worker, daemon=True).start()
     threading.Thread(target=prewarm_tts, daemon=True).start()
-    _CLAUDE_POOL.submit(claude_prewarm)
 
     try:
         server = JarvisHTTPServer(("127.0.0.1", PORT), Handler)
