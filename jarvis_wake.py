@@ -219,7 +219,7 @@ def record_test():
         w.setsampwidth(2)
         w.setframerate(sr)
         w.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
-    print(f"저장 완료: {path}  → Claude에게 '녹음했어' 라고 알려주세요.")
+    print(f"저장 완료: {path}")
 
 
 if __name__ == "__main__":
